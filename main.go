@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const appVersion = "4.0"
+const appVersion = "4.1"
 const listenAddr = "127.0.0.1:47811"
 
 //go:embed web
@@ -90,6 +90,7 @@ func main() {
 	loadProfile()
 	startDevices()
 	routes()
+	startUpdateCheck()
 	go watchdog()
 	if os.Getenv("SCBIND_NOBROWSER") == "" {
 		go func() { time.Sleep(300 * time.Millisecond); openBrowser(url) }()
@@ -247,7 +248,7 @@ func currentState() map[string]any {
 	for _, d := range connected {
 		out = append(out, devOut{d, num[d.Key]})
 	}
-	return map[string]any{"devices": out, "installs": installs, "profRev": profRev, "sync": sync, "gameOrder": gameOrder, "version": appVersion, "advanced": profile.advancedSummary()}
+	return map[string]any{"devices": out, "installs": installs, "profRev": profRev, "sync": sync, "gameOrder": gameOrder, "version": appVersion, "advanced": profile.advancedSummary(), "devWarn": hub.warning(), "update": getUpd()}
 }
 
 func selectedInstall(installs []Install) *Install {

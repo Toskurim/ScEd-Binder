@@ -43,6 +43,9 @@ func startDevices() {
 			i, _ := strconv.Atoi(v)
 			mockOn[i] = !mockOn[i]
 		}
+		if q.Has("warn") {
+			hub.setWarn(q.Get("warn"))
+		}
 		key := q.Get("key")
 		if v := q.Get("button"); v != "" {
 			b, _ := strconv.Atoi(v)

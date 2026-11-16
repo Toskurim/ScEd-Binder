@@ -63,11 +63,12 @@ type Profile struct {
 	Install         string              `json:"install"`
 	CustomRoot      string              `json:"customRoot"`
 	Imported        bool                `json:"imported"`
-	OrderManual     bool                `json:"orderManual"` // ordine scelto a mano con le frecce (altrimenti segue quello del gioco)
-	Layouts         []Layout            `json:"layouts"`     // layout salvati (assegnazioni + inversioni); quello attivo è anche in Bindings
-	Layout          string              `json:"layout"`      // nome del layout attivo
-	ED              *EDState            `json:"ed"`          // assegnazioni per Elite Dangerous
-	Game            string              `json:"game"`        // gioco selezionato: "sc" o "ed"
+	NoAutoUpdate    bool                `json:"noAutoUpdate"` // non cercare e installare gli aggiornamenti all'avvio
+	OrderManual     bool                `json:"orderManual"`  // ordine scelto a mano con le frecce (altrimenti segue quello del gioco)
+	Layouts         []Layout            `json:"layouts"`      // layout salvati (assegnazioni + inversioni); quello attivo è anche in Bindings
+	Layout          string              `json:"layout"`       // nome del layout attivo
+	ED              *EDState            `json:"ed"`           // assegnazioni per Elite Dangerous
+	Game            string              `json:"game"`         // gioco selezionato: "sc" o "ed"
 }
 
 var (
@@ -425,6 +426,7 @@ func importActionMaps(data []byte, old *Profile) (*Profile, error) {
 	p.Layouts = old.Layouts
 	p.Layout = old.Layout
 	p.OrderManual = old.OrderManual
+	p.NoAutoUpdate = old.NoAutoUpdate
 	p.ED = old.ED
 	p.Game = old.Game
 	p.Imported = true

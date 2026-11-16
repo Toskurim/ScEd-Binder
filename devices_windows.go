@@ -340,12 +340,41 @@ func diThread() {
 
 	open := []*openDev{}
 	lastEnum := time.Time{}
+	enumEvery := 2500 * time.Millisecond
+	slowLogged, zeroLogged, first := time.Time{}, false, true
 	for {
-		if time.Since(lastEnum) > 2500*time.Millisecond {
+		if time.Since(lastEnum) > enumEvery {
 			lastEnum = time.Now()
 			xinputFind()
 			enumResult = enumResult[:0]
 			hr := comCall(di, 4, di8DevClassGameCtl, enumCB, 0, diEDFLAttachedOnly)
+			// Se Windows impiega molto a elencare le periferiche (USB instabile, hub difettoso) la lettura
+			// di tutte le altre resta ferma nel frattempo: lo scrivo nel registro, avviso nell'app e chiedo l'elenco più di rado.
+			took := time.Since(lastEnum)
+			warn := ""
+			if took > time.Second {
+				enumEvery = 10 * time.Second
+				warn = fmt.Sprint("Windows risponde lentamente quando gli si chiede l'elenco delle periferiche: i movimenti possono arrivare in ritardo. Di solito è una periferica o un hub USB che si collega e scollega di continuo.")
+				if time.Since(slowLogged) > time.Minute {
+					slowLogged = time.Now()
+					logf("ATTENZIONE: elenco delle periferiche lento (%.1f s): lettura in ritardo; probabile periferica o hub USB instabile", took.Seconds())
+				}
+			} else {
+				enumEvery = 2500 * time.Millisecond
+			}
+			if !failed(hr) && len(enumResult) == 0 {
+				if warn == "" {
+					warn = "Windows non segnala nessuna periferica di gioco collegata. Se sono collegate, controlla con joy.cpl (Win+R): se non compaiono nemmeno lì, scollega e ricollega i cavi USB oppure riavvia il PC."
+				}
+				if !zeroLogged && (first || len(open) > 0) {
+					logf("Windows non restituisce nessuna periferica di gioco (EnumDevices: 0 periferiche)")
+				}
+				zeroLogged = true
+			} else if len(enumResult) > 0 {
+				zeroLogged = false
+			}
+			first = false
+			hub.setWarn(warn)
 			if failed(hr) {
 				logf("EnumDevices fallita (0x%08X)", hr)
 			} else if enumChanged(open, enumResult) {

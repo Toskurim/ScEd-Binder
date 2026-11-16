@@ -23,6 +23,7 @@ Per **Elite Dangerous** (dalla versione 3.0, ancora da collaudare in gioco) gest
 - Anteprima 3D dei movimenti della nave.
 - Scrive `actionmaps.xml` nella cartella del gioco (con copia di sicurezza).
 - Le assegnazioni sono legate alla periferica, non al numero `jsN`: se aggiungi o togli una periferica la numerazione viene ricalcolata.
+- Aggiornamento automatico: all'avvio controlla l'ultima versione pubblicata qui su GitHub, scarica il nuovo `.exe` accanto a quello in uso, ne verifica l'impronta SHA-256 e passa alla nuova versione (si disattiva dalle Opzioni).
 
 ## Uso
 Scarica `ScEd_Binder_vX.Y.exe` dalla pagina [Releases](https://github.com/Toskurim/ScEd-Binder/releases) e avvialo (Windows 10/11 a 64 bit). Si apre una finestra dell'app (usa Microsoft Edge o Chrome come finestra, non serve Internet). I dati stanno nella cartella `dati` accanto al programma.

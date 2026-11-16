@@ -44,6 +44,7 @@ type deviceHub struct {
 	states  []DevState
 	gp      GPState
 	rev     int
+	warn    string // avviso sulla lettura delle periferiche, mostrato nell'app
 }
 
 var hub = &deviceHub{}
@@ -53,6 +54,16 @@ func (h *deviceHub) set(devs []Device) {
 	h.devices = devs
 	h.rev++
 	h.mu.Unlock()
+}
+func (h *deviceHub) setWarn(w string) {
+	h.mu.Lock()
+	h.warn = w
+	h.mu.Unlock()
+}
+func (h *deviceHub) warning() string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.warn
 }
 func (h *deviceHub) setStates(st []DevState) {
 	h.mu.Lock()

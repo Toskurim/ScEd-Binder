@@ -146,10 +146,19 @@ function curInstall() {
   return S.installs.find(i => i.path.toLowerCase() === (S.profile.install || '').toLowerCase())
     || S.installs.find(i => i.launcher) || S.installs.find(i => i.name.toUpperCase() === 'LIVE') || S.installs[0];
 }
+function updBanner() {
+  const u = S.update || {};
+  if (u.status === 'downloading') return `<div class="info">⬇ È uscita la versione <b>${esc(u.version)}</b>: la sto scaricando (<span id="updpct">${u.pct || 0}</span>%). Al termine l'app passa da sola alla nuova versione; le tue assegnazioni restano.</div>`;
+  if (u.status === 'starting') return `<div class="info">Versione <b>${esc(u.version)}</b> scaricata: sto passando alla nuova versione…</div>`;
+  if (u.status === 'error') return `<div class="bad">Aggiornamento automatico non riuscito: ${esc(u.msg || '')}</div>`;
+  return '';
+}
 function applyState(r) {
   S.gameOrder = r.gameOrder || []; S.advanced = r.advanced || {};
-  const sig = JSON.stringify([r.devices, r.installs, r.sync, r.gameOrder, r.advanced]);
+  S.devWarn = r.devWarn || ''; S.update = r.update || {};
+  const sig = JSON.stringify([r.devices, r.installs, r.sync, r.gameOrder, r.advanced, S.devWarn, S.update.status, S.update.version, S.update.msg]);
   const changed = sig !== S.sig;
+  if ($('#updpct')) $('#updpct').textContent = S.update.pct || 0;
   S.sig = sig; S.devices = r.devices || []; S.installs = r.installs || []; S.sync = r.sync || '';
   return changed;
 }
@@ -233,16 +242,17 @@ function renderHeader() {
   const sel = $('#install'), cur = curInstall();
   sel.innerHTML = S.installs.map(i => `<option value="${esc(i.path)}" ${cur && i.path === cur.path ? 'selected' : ''}>${esc(i.name)} — ${esc(i.path)}${i.launcher ? '  ★ avviato dal launcher' : ''}${i.lastRun ? '  (ultimo avvio ' + new Date(i.lastRun * 1000).toLocaleDateString('it-IT') + ')' : '  (mai avviato)'}</option>`).join('') || '<option>non trovata</option>';
   $('#layout').innerHTML = layoutNames().map(n => `<option ${n === S.profile.layout ? 'selected' : ''}>${esc(n)}</option>`).join('');
-  const sy = $('#sync'), ban = [];
+  const sy = $('#sync'), ban = []; if (updBanner()) ban.push(updBanner());
   const map = { ok: ['ok', '● Il gioco è allineato'], todo: ['todo', '● Modifiche da scrivere nel gioco'], ext: ['ext', '● File del gioco cambiato fuori dall\'app'] };
   $('#game').value = S.game;
   const m = isED() ? (map[(S.ed || {}).sync] || ['', '']) : (map[S.sync] || ['', '']);
   sy.className = 'sync ' + m[0]; sy.textContent = m[1];
   if (isED()) {
-    const E = S.ed || {}; const eb = [];
+    const E = S.ed || {}; const eb = []; if (updBanner()) eb.push(updBanner());
     if (E.file && E.file.error) eb.push(`<div class="bad">${esc(E.file.error)}</div>`);
     else if (E.file) eb.push(`<div class="info">Elite Dangerous — file dei comandi: <b>${esc(E.file.path)}</b>${(E.file.start || []).some(s => s !== E.file.preset) ? ` · Attenzione: nel gioco per alcune modalità è selezionato un altro preset (${esc([...new Set(E.file.start)].join(', '))}); l'app modifica "${esc(E.file.preset)}".` : ''}</div>`);
-    if (!S.devices.some(d => !d.gamepad)) eb.push('<div class="info">Nessun joystick rilevato in questo momento.</div>');
+    if (S.devWarn) eb.push(`<div class="bad">${esc(S.devWarn)}</div>`);
+    else if (!S.devices.some(d => !d.gamepad)) eb.push('<div class="info">Nessun joystick rilevato in questo momento.</div>');
     $('#banner').innerHTML = eb.join(''); return;
   }
   if (!S.installs.length) ban.push(`<div class="bad">Non trovo Star Citizen su questo PC. Indica la cartella (es. D:\\Giochi\\StarCitizen oppure ...\\StarCitizen\\LIVE): <input type="text" id="rootInput" size="40"> <button id="rootSave">Cerca</button> <button id="rootBrowse">Sfoglia…</button> — oppure <button data-b="savefile">Salva il file nella cartella dell'app</button> e copialo tu nel gioco.</div>`);
@@ -257,7 +267,8 @@ function renderHeader() {
   if (S.sync === 'ext') ban.push(`<div class="warn">Nel gioco ci sono comandi diversi da quelli dell'app (modificati dentro il gioco, oppure è un'altra installazione). <button data-b="import">Importa dal gioco</button> (prende i comandi del gioco) oppure <button data-b="write">Scrivi nel gioco</button> (tiene quelli dell'app; la numerazione js resta quella del gioco).</div>`);
   const off = S.profile.order.filter(k => !liveDev(k) && S.profile.bindings.some(b => b.dev === k));
   if (off.length) ban.push(`<div class="info">Periferiche scollegate: <b>${off.map(k => esc(devName(k))).join(', ')}</b>. Le loro assegnazioni restano salvate nell'app e tornano attive quando le ricolleghi; intanto le altre periferiche vengono rinumerate.</div>`);
-  if (!S.devices.some(d => !d.gamepad)) ban.push(`<div class="info">Nessun joystick rilevato in questo momento. Collega le periferiche: compaiono da sole entro qualche secondo.</div>`);
+  if (S.devWarn) ban.push(`<div class="bad">${esc(S.devWarn)}</div>`);
+  else if (!S.devices.some(d => !d.gamepad)) ban.push(`<div class="info">Nessun joystick rilevato in questo momento. Collega le periferiche: compaiono da sole entro qualche secondo.</div>`);
   $('#banner').innerHTML = ban.join('');
 }
 function renderSidebar() {
@@ -375,15 +386,27 @@ function renderDevice() {
   renderImage();
 }
 
-const PH = /^(BUTTON_(\d+)|AXIS_(X|Y|Z|RX|RY|RZ)|AXIS_SLIDER_(\d)|([XYZ])_AXIS|POV_(\d+)_([UDLR])|TEMPLATE_NAME)$/;
+const PH = /^(BUTTON_(\d+)|AXIS_(X|Y|Z|RX|RY|RZ)|AXIS_SLIDER(?:_(\d))?|SLIDER_(\d)|(R?)([XYZ])_AXIS|POV_(\d+)_([UDLR])|TEMPLATE_NAME)$/;
 function phInput(t) {
-  const m = PH.exec(t); if (!m) return null;
+  t = (t || '').replace(/ /g, ' ').trim();
+  const w = /^(r?)([xyz])\s+axis$/i.exec(t); // es. "rZ Axis"
+  if (w) return (w[1] ? 'rot' : '') + w[2].toLowerCase();
+  const m = PH.exec(t.toUpperCase()); if (!m) return null;
   if (m[2]) return 'button' + m[2];
   if (m[3]) return { X: 'x', Y: 'y', Z: 'z', RX: 'rotx', RY: 'roty', RZ: 'rotz' }[m[3]];
-  if (m[4]) return 'slider' + m[4];
-  if (m[5]) return m[5].toLowerCase();
-  if (m[6]) return 'hat' + m[6] + '_' + { U: 'up', D: 'down', L: 'left', R: 'right' }[m[7]];
+  if (/^AXIS_SLIDER/.test(m[1])) return 'slider' + (m[4] || '1');
+  if (m[5]) return 'slider' + m[5];
+  if (m[7]) return (m[6] ? 'rot' : '') + m[7].toLowerCase();
+  if (m[8]) return 'hat' + m[8] + '_' + { U: 'up', D: 'down', L: 'left', R: 'right' }[m[9]];
   return '@name';
+}
+// una casella dello schema può contenere un segnaposto solo oppure più di uno ("BUTTON_14 | BUTTON_15")
+function phInputs(t) {
+  const one = phInput(t); if (one) return [one];
+  const toks = (t || '').replace(/ /g, ' ').split(/[|\/\s]+/).filter(Boolean);
+  if (toks.length < 2 || toks.length > 4) return null;
+  const ins = toks.map(phInput);
+  return ins.every(x => x && x !== '@name') ? ins : null;
 }
 async function renderImage() {
   const key = S.view.key, di = devInfo(key), img = di.image || '', area = $('#imgarea'), hint = $('#imghint');
@@ -408,19 +431,31 @@ async function renderImage() {
     const box = document.createElement('div'); box.className = 'imgbox';
     box.appendChild(document.importNode(svg, true));
     for (const el of box.querySelectorAll('div,text')) {
-      if (el.children.length) continue;
-      const input = phInput((el.textContent || '').trim());
-      if (!input) continue;
-      if (input === '@name') { el.textContent = devName(key); continue; }
-      const lab = labelFor(input);
-      el.textContent = lab ? lab : inputShort(input);
-      el.setAttribute('title', inputLabel(input) + (lab ? ': ' + lab : ' (non assegnato)'));
-      if (el.tagName.toLowerCase() === 'div') {
-        el.classList.add('ph'); el.dataset.live = input; el.dataset.input = input;
-        el.style.fontSize = lab ? (lab.length > 40 ? '5.5px' : '6.5px') : '9px';
-        el.style.color = lab ? '#003a75' : '#666'; el.style.fontWeight = lab ? '700' : '600';
-        el.style.pointerEvents = 'all';
-      }
+      const isDiv = el.tagName.toLowerCase() === 'div';
+      // foglia = nessun altro div/text dentro (span, font, b… non contano: alcuni schemi li usano attorno al testo)
+      if (isDiv ? el.querySelector('div') : el.children.length) continue;
+      let txt = el.textContent || '';
+      if (isDiv && el.querySelector('br')) { const c = el.cloneNode(true); for (const br of [...c.querySelectorAll('br')]) br.replaceWith(' '); txt = c.textContent || ''; } // "BUTTON_62<br>BUTTON_35"
+      const ins = phInputs(txt);
+      if (!ins) continue;
+      if (ins[0] === '@name') { el.textContent = devName(key); continue; }
+      if (!isDiv) { el.textContent = ins.map(i => labelFor(i) || inputShort(i)).join(' | '); continue; }
+      el.textContent = '';
+      el.style.pointerEvents = 'all';
+      const mk = (node, input) => {
+        const lab = labelFor(input);
+        node.textContent = lab ? lab : inputShort(input);
+        node.setAttribute('title', inputLabel(input) + (lab ? ': ' + lab : ' (non assegnato)'));
+        node.classList.add('ph'); node.dataset.live = input; node.dataset.input = input;
+        node.style.fontSize = lab ? (lab.length > 40 ? '5.5px' : '6.5px') : '9px';
+        node.style.color = lab ? '#003a75' : '#666'; node.style.fontWeight = lab ? '700' : '600';
+        node.style.pointerEvents = 'all';
+      };
+      if (ins.length === 1) mk(el, ins[0]);
+      else ins.forEach((input, i) => {
+        if (i) el.appendChild(document.createTextNode(' | '));
+        const sp = document.createElement('span'); mk(sp, input); sp.style.cursor = 'pointer'; el.appendChild(sp);
+      });
     }
     area.innerHTML = ''; area.appendChild(box);
     hint.innerHTML = 'Premi un tasto sulla periferica: la sua casella si illumina di giallo. Clicca una casella per assegnare un comando. Se le caselle non corrispondono ai tuoi tasti (numerazione personalizzata nel software della periferica), scegli un altro schema o carica una tua immagine. <small>Schemi dal progetto open source Joystick Diagrams.</small>';
@@ -1015,9 +1050,10 @@ $('#menu').addEventListener('click', async e => {
       openModal(`<h2>Opzioni</h2>
         <label class="chk"><input type="checkbox" id="oclr" ${S.profile.clearJsDefaults ? 'checked' : ''}> <span><b>Disattiva i tasti joystick predefiniti del gioco</b> per i comandi a cui non hai assegnato nulla. Consigliato con più periferiche: evita che il primo joystick abbia comandi "fantasma" decisi dal gioco.</span></label>
         <label>Cartella di Star Citizen (solo se non viene trovata da sola):<br><input type="text" id="oroot" style="width:100%" value="${esc(S.profile.customRoot || '')}" placeholder="es. D:\\Giochi\\StarCitizen"> <button class="small" id="obrowse">Sfoglia…</button></label>
+        <label class="chk"><input type="checkbox" id="oupd" ${S.profile.noAutoUpdate ? '' : 'checked'}> <span><b>Cerca e installa gli aggiornamenti all'avvio.</b> L'app controlla su GitHub se è uscita una versione nuova, la scarica accanto a quella in uso e passa da sola alla nuova.</span></label>
         <div class="btns"><button data-close="1">Annulla</button><button class="primary" id="osave">Salva</button></div>`);
       $('#obrowse').onclick = async () => { try { const r = await api('/api/browse', {}); if (r.path) $('#oroot').value = r.path; } catch (err) { toast(err.message, true); } };
-      $('#osave').onclick = () => { S.profile.clearJsDefaults = $('#oclr').checked; S.profile.customRoot = $('#oroot').value.trim(); saveProfile().then(pollState); $('#modal').classList.add('hidden'); render(); };
+      $('#osave').onclick = () => { S.profile.clearJsDefaults = $('#oclr').checked; S.profile.noAutoUpdate = !$('#oupd').checked; S.profile.customRoot = $('#oroot').value.trim(); saveProfile().then(pollState); $('#modal').classList.add('hidden'); render(); };
     }
   } catch (err) { toast(err.message, true); }
 });
