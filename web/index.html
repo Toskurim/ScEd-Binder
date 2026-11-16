@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>ScEd Binder</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <img src="icon.png" class="logo" alt=""><div class="brand">ScEd Binder <span id="ver"></span></div>
+  <label class="inst">Gioco <select id="game"><option value="sc">Star Citizen</option><option value="ed">Elite Dangerous</option></select></label>
+  <label class="inst only-sc">Installazione <select id="install"></select></label>
+  <label class="inst only-sc">Layout <select id="layout" title="Insieme di assegnazioni in uso nell'app"></select></label>
+  <button id="btnLayout" class="small only-sc" title="Crea, duplica, rinomina o elimina un layout">Gestisci</button>
+  <div id="lymenu" class="menu hidden" style="right:auto;left:420px">
+    <a data-ly="new">Nuovo layout vuoto…</a>
+    <a data-ly="dup">Duplica il layout attuale…</a>
+    <a data-ly="ren">Rinomina…</a>
+    <a data-ly="del">Elimina il layout attuale</a>
+  </div>
+  <div id="sync" class="sync"></div>
+  <div class="spacer"></div>
+  <button id="btnImport" title="Legge i comandi attualmente salvati nel gioco">Importa dal gioco</button>
+  <button id="btnWrite" class="primary" title="Scrive actionmaps.xml nella cartella del gioco">Scrivi nel gioco</button>
+  <button id="btnMenu" title="Altro">&#8943;</button>
+  <div id="menu" class="menu hidden">
+    <a data-act="preview">Anteprima del file che verrà scritto</a>
+    <a data-act="savefile">Salva il file nella cartella dell'app (senza scriverlo nel gioco)</a>
+    <a data-act="opengame">Apri la cartella dei comandi del gioco</a>
+    <a data-act="opendata">Apri la cartella dati dell'app (profilo, copie di sicurezza)</a>
+    <a data-act="options">Opzioni</a>
+    <a data-act="log">Diagnostica periferiche</a>
+    <a data-act="about">Informazioni</a>
+  </div>
+</header>
+<div id="banner"></div>
+<main>
+  <aside>
+    <div class="navitem" data-view="all" id="navAll"><b>Tutti i comandi</b><small id="navAllCount"></small></div>
+    <div class="navitem only-sc" data-view="ship" id="navShip"><b>Anteprima 3D della nave</b><small>prova i movimenti assegnati</small></div>
+    <h3>Periferiche <small>(ordine = numero nel gioco)</small></h3>
+    <div id="devlist"></div>
+    <div id="padlist"></div>
+    <p class="hint only-sc">I numeri js1, js2… sono quelli che usa il gioco: l'app li legge dal file del gioco e si adegua da sola. Con le frecce puoi provare a imporre un ordine tuo.</p>
+    <p class="hint only-sc">Collega o scollega una periferica: la numerazione js1, js2… si aggiorna da sola e le assegnazioni restano legate alla periferica giusta. Poi premi <b>Scrivi nel gioco</b>.</p>
+  </aside>
+  <section id="view"></section>
+</main>
+<div id="modal" class="modal hidden"><div class="box" id="modalBox"></div></div>
+<div id="toast" class="toast hidden"></div>
+<script src="app.js"></script>
+</body>
+</html>

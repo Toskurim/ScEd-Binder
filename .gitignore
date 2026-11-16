@@ -1,0 +1,4 @@
+dati/
+*.exe
+testdata/
+real_test.go
