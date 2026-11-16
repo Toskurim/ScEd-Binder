@@ -6,6 +6,12 @@ Assegna i comandi di **Star Citizen** e di **Elite Dangerous** a joystick, manet
 
 *Bind Star Citizen and Elite Dangerous controls to all your devices without launching the game. Italian UI and Italian command names (English names shown alongside).*
 
+## Video dimostrativo
+
+![Video dimostrativo di ScEd Binder](docs/ScEd_Binder_demo.gif)
+
+Un minuto e mezzo, senza audio: rilevamento delle periferiche, schema con i tasti, assegnazione dei comandi, anteprima 3D, numerazione automatica, layout, scrittura nel gioco ed Elite Dangerous. Versione in alta definizione: [`docs/ScEd_Binder_demo.mp4`](docs/ScEd_Binder_demo.mp4). Il video è girato con periferiche simulate.
+
 Per **Elite Dangerous** (dalla versione 3.0, ancora da collaudare in gioco) gestisce joystick, manette e pedaliere; tastiera e mouse vengono conservati ma non modificati. Fino alla versione 3.1 il programma si chiamava *SC Binding*.
 
 ## Cosa fa
