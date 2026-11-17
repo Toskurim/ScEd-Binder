@@ -199,3 +199,20 @@ body.prn-measure .devwrap,body.prn-measure main,body.prn-measure #view{overflow:
 .tcard .btns{display:flex;gap:8px;margin-top:14px;align-items:center}
 .tcard .grow{flex:1}
 .tnews{margin:0 0 10px;padding-left:18px}.tnews li{margin:4px 0}
+
+/* ---- firma e finestra Informazioni ---- */
+.credit{display:flex;align-items:center;gap:9px;margin:18px 2px 4px;padding:8px 10px;border-top:1px solid var(--line);color:var(--dim);font-size:12.5px;cursor:pointer;border-radius:8px;transition:background .15s,color .15s}
+.credit:hover{background:var(--panel2);color:var(--txt)}
+.credit img{width:26px;height:26px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1.5px var(--acc)}
+.credit b{color:var(--txt);font-weight:600}
+.abhead{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.abhead img{width:54px;height:54px;border-radius:12px}
+.abhead h2{margin:0}.abhead h2 span{color:var(--dim);font-weight:400;font-size:15px}
+.abby{display:flex;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(135deg,var(--panel2),transparent)}
+.abby img{width:58px;height:58px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 2px var(--acc),0 0 18px rgba(58,160,255,.35)}
+.byline{font-size:17px;letter-spacing:.2px}.byline b{font-weight:700}
+.abthanks{margin:12px 0;padding:12px 14px;border:1px solid rgba(58,160,255,.45);border-radius:12px;background:rgba(58,160,255,.07);line-height:1.5}
+.abt{font-weight:700;margin-bottom:4px}
+.refrow{display:flex;align-items:center;gap:10px;margin:9px 0 6px}
+.refrow code{font:700 18px/1 Consolas,"Cascadia Mono",monospace;letter-spacing:1.5px;padding:9px 14px;border-radius:8px;background:var(--bg);border:1px dashed var(--acc);color:#fff;user-select:all}
+.abinfo{color:var(--dim);font-size:12.5px;margin:10px 0 8px}

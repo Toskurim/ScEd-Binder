@@ -512,6 +512,27 @@ async function renderImage() {
     ? (S.placing ? `Ora clicca sull'immagine nel punto in cui si trova <b>${esc(inputLabel(S.placing))}</b>.` : 'Premi un tasto sulla periferica (oppure 📍 nella lista a destra), poi clicca sull\'immagine dove si trova.')
     : 'Usa <b>Posiziona etichette</b> per indicare dove si trova ogni tasto. Clic su un\'etichetta per assegnare un comando; clic destro per toglierla.';
 }
+// ---------- informazioni e ringraziamenti ----------
+const REFERRAL = 'STAR-D22F-7ZTY';
+function showAbout() {
+  openModal(`<div class="abhead"><img src="icon.png" alt=""><div><h2>ScEd Binder <span>v${esc(S.version)}</span></h2><div class="hint">Star Citizen + Elite Dangerous · github.com/Toskurim/ScEd-Binder</div></div></div>
+    <div class="abby"><img src="autore.jpg" alt=""><div><div class="byline">By <b>09|Cyborg</b> &amp; <b>Claude</b></div><div class="hint">Gratuito e open source, fatto da un giocatore per i giocatori.</div></div></div>
+    <div class="abthanks"><div class="abt">Ti è utile? Un modo per dire grazie</div>
+      <div>Se tu o un amico state per iscrivervi a <b>Star Citizen</b>, potete usare il mio codice referral quando create l'account:</div>
+      <div class="refrow"><code id="refcode">${REFERRAL}</code><button class="small" id="refcopy">Copia</button></div>
+      <div class="hint">Si inserisce al momento della registrazione sul sito del gioco. Non costa nulla ed è del tutto facoltativo.</div></div>
+    <div class="abinfo"><div>Comandi del gioco: ${esc(S.gameData)}</div><div>Cartella dati: ${esc(S.dataDir)}</div></div>
+    <div class="en">Schemi delle periferiche: progetto open source Joystick Diagrams (github.com/Rexeh/joystick-diagrams, licenza GPL-2.0). Traduzione di base dei comandi: comunità italiana di Star Citizen (progetto StarCitizen-Localization), riveduta. Regole di numerazione dei joystick: osservazioni del progetto BindSight. Star Citizen è un marchio di Cloud Imperium Games, Elite Dangerous di Frontier Developments; questa app non è affiliata a nessuno dei due.</div><div class="btns"><button data-close="1">Chiudi</button></div>`);
+}
+document.addEventListener('click', e => {
+  const t = e.target; if (!t || !t.closest) return;
+  if (t.closest('#credit')) showAbout();
+  if (t.id === 'refcopy') {
+    const ok = () => { t.textContent = 'Copiato ✓'; setTimeout(() => { if (t.isConnected) t.textContent = 'Copia'; }, 1800); };
+    const sel = () => { const r = document.createRange(); r.selectNodeContents($('#refcode')); const g = getSelection(); g.removeAllRanges(); g.addRange(r); try { document.execCommand('copy'); ok(); } catch (err) { } };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(REFERRAL).then(ok, sel); else sel();
+  }
+});
 // ---------- comandi letti dal gioco: avvisi e riepilogo dei cambiamenti ----------
 function gameBanner() {
   const g = S.gameInfo || {};
@@ -536,7 +557,8 @@ function showGameChange() {
 }
 
 // ---------- guida introduttiva ----------
-const NEWS = { ver: '4.4', items: [
+const NEWS = { ver: '4.5', items: [
+  'Nuova finestra «Informazioni e ringraziamenti» (menu ⋯, oppure la firma in fondo alla colonna di sinistra).',
   'Corretto l\'errore di avvio della 4.3 («Cannot read properties of null») che compariva quando il gioco aveva comandi nuovi ma nessuno rimosso, o viceversa.',
   'L\'elenco dei comandi di Star Citizen ora viene letto direttamente dal gioco installato: a ogni aggiornamento del gioco l\'app si allinea da sola e ti dice quali comandi sono nuovi o spariti.',
   'Questa guida: parte al primo avvio e dopo ogni aggiornamento, e la ritrovi nel menu ⋯ > Guida introduttiva.',
@@ -561,7 +583,7 @@ function tourSteps() {
     { t: 'Scrivere nel gioco', sel: '#btnWrite', sel2: '#sync', h: 'Quando hai finito, <b>chiudi il gioco</b> e premi <b>Scrivi nel gioco</b>. L\'app salva il file dei comandi nella cartella del gioco e prima ne fa sempre una copia di sicurezza (cartella <i>dati\\backup</i>).<br><br>La scritta accanto ti dice se il gioco è allineato o se hai modifiche ancora da scrivere.' },
     { t: 'Il menu ⋯', sel: '#btnMenu', h: 'Nel menu trovi: anteprima del file, cartelle del gioco e dei dati, stampa di tutte le periferiche, <b>Opzioni</b>, <b>Diagnostica periferiche</b> (da mandare se qualcosa non va) e questa guida.' },
     { t: 'Sempre aggiornato', h: '<b>Il programma</b>: all\'avvio controlla se è uscita una versione nuova, la scarica e passa da solo a quella (si disattiva dalle Opzioni).<br><br><b>I comandi di Star Citizen</b>: l\'app legge la versione del gioco installato e, quando il gioco si aggiorna, rilegge l\'elenco dei comandi dai suoi file e ti mostra quali sono nuovi o spariti. I comandi nuovi possono comparire in inglese finché non arriva la traduzione.' },
-    { t: 'Fatto!', h: 'Per cominciare: controlla l\'installazione, clicca una periferica, premi un tasto e assegnagli un comando. Poi chiudi il gioco e premi <b>Scrivi nel gioco</b>.<br><br>Buon volo! o7' },
+    { t: 'Fatto!', h: 'Per cominciare: controlla l\'installazione, clicca una periferica, premi un tasto e assegnagli un comando. Poi chiudi il gioco e premi <b>Scrivi nel gioco</b>.<br><br>Se il programma ti è utile, in <b>⋯ > Informazioni e ringraziamenti</b> trovi un modo per dire grazie.<br><br>Buon volo! o7' },
   ];
   const isUpdate = S.profile.tutorialSeen && S.profile.tutorialSeen !== S.version;
   if (isUpdate) st.unshift({ t: 'Novità della versione ' + esc(S.version), h: '<ul class="tnews">' + NEWS.items.map(x => '<li>' + x + '</li>').join('') + '</ul>Di seguito la guida completa alle funzioni: se la conosci già, premi «Salta la guida».', pre: toAll });
@@ -1254,7 +1276,7 @@ $('#menu').addEventListener('click', async e => {
     if (a === 'tour') { startTour(true); }
     if (a === 'printall') { const ks = printableKeys(); if (!ks.length) toast('Nessuna periferica ha ancora comandi assegnati.', true); else await printDevices(ks); }
     if (a === 'log') { const r = await api('/api/log'); openModal(`<h2>Diagnostica periferiche</h2><div class="en">Se una periferica non viene letta bene, copia questo testo e mandalo a chi ti ha fatto l'app.</div><pre>${esc(r.join('\n'))}\n\n${esc(JSON.stringify(S.devices, null, 1))}</pre><div class="btns"><button data-close="1">Chiudi</button></div>`); }
-    if (a === 'about') openModal(`<h2>ScEd Binder v${esc(S.version)}</h2><div>Star Citizen + Elite Dangerous · github.com/Toskurim/ScEd-Binder</div><div>Comandi del gioco: ${esc(S.gameData)}</div><div>Cartella dati: ${esc(S.dataDir)}</div><div class="en">Schemi delle periferiche: progetto open source Joystick Diagrams (github.com/Rexeh/joystick-diagrams, licenza GPL-2.0). Traduzione di base dei comandi: comunità italiana di Star Citizen (progetto StarCitizen-Localization), riveduta. Regole di numerazione dei joystick: osservazioni del progetto BindSight. Star Citizen è un marchio di Cloud Imperium Games, Elite Dangerous di Frontier Developments; questa app non è affiliata a nessuno dei due.</div><div class="btns"><button data-close="1">Chiudi</button></div>`);
+    if (a === 'about') showAbout();
     if (a === 'options') {
       openModal(`<h2>Opzioni</h2>
         <label class="chk"><input type="checkbox" id="oclr" ${S.profile.clearJsDefaults ? 'checked' : ''}> <span><b>Disattiva i tasti joystick predefiniti del gioco</b> per i comandi a cui non hai assegnato nulla. Consigliato con più periferiche: evita che il primo joystick abbia comandi "fantasma" decisi dal gioco.</span></label>
