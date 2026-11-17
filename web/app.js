@@ -1,4 +1,14 @@
 'use strict';
+// versione del programma che ha servito questa pagina (il server la scrive qui al posto del segnaposto)
+const JSVER = '__APPVER__';
+// la finestra può essersi caricata dalla versione vecchia un attimo prima che la nuova prendesse il suo posto:
+// se il programma che risponde non è quello che ha servito la pagina, ricarico (al massimo 3 volte di fila)
+function staleCheck(ver) {
+  if (!ver || JSVER.startsWith('__') || ver === JSVER) return false;
+  let n = 0; try { n = +sessionStorage.getItem('scedReload') || 0; sessionStorage.setItem('scedReload', n + 1); } catch (e) { }
+  if (n >= 3) return false;
+  location.reload(); return true;
+}
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -127,6 +137,8 @@ function layoutAction(a) {
 // ---------- avvio e aggiornamento ----------
 async function boot() {
   const r = await api('/api/boot');
+  if (staleCheck(r.version)) return;
+  try { if (r.version === JSVER) sessionStorage.removeItem('scedReload'); } catch (e) { }
   S.maps = r.maps || []; S.templates = r.templates || []; S.profile = r.profile; S.profRev = r.profRev;
   S.invertDefaults = r.invertDefaults || {}; S.photoDevices = (r.photoDevices || []).slice().sort((a, b) => (a.brand + a.name).localeCompare(b.brand + b.name)); S.photoById = {}; for (const p of S.photoDevices) S.photoById[p.id] = p; S.gameData = r.gameData; S.version = r.version; S.dataDir = r.dataDir;
   for (const m of S.maps) for (const a of (m.actions || [])) S.actions.set(actKey(a.map, a.name), a);
@@ -134,13 +146,14 @@ async function boot() {
   if (isED()) { try { S.ed = await api('/api/ed/state'); S.edCmd = {}; for (const c of (S.ed.commands || [])) S.edCmd[c.tag] = c; } catch (e) { } }
   $('#ver').textContent = 'v' + r.version;
   document.title = 'ScEd Binder v' + r.version;
-  applyState(r);
+  applyState(r); S.gameRev = (r.game || {}).rev || 0;
   // primo avvio: leggo subito quello che c'è nel gioco
   const inst = curInstall();
   if (inst && inst.exists && !S.profile.imported && S.profile.bindings.length === 0) await doImport(true);
   render();
   setInterval(pollState, 2000);
   pollInput();
+  setTimeout(() => startTour(false), 400);
 }
 function curInstall() {
   return S.installs.find(i => i.path.toLowerCase() === (S.profile.install || '').toLowerCase())
@@ -155,8 +168,8 @@ function updBanner() {
 }
 function applyState(r) {
   S.gameOrder = r.gameOrder || []; S.advanced = r.advanced || {};
-  S.devWarn = r.devWarn || ''; S.update = r.update || {};
-  const sig = JSON.stringify([r.devices, r.installs, r.sync, r.gameOrder, r.advanced, S.devWarn, S.update.status, S.update.version, S.update.msg]);
+  S.devWarn = r.devWarn || ''; S.update = r.update || {}; S.gameInfo = r.game || {};
+  const sig = JSON.stringify([r.devices, r.installs, r.sync, r.gameOrder, r.advanced, S.devWarn, S.update.status, S.update.version, S.update.msg, S.gameInfo.status, S.gameInfo.version, (S.gameInfo.change || {}).to]);
   const changed = sig !== S.sig;
   if ($('#updpct')) $('#updpct').textContent = S.update.pct || 0;
   S.sig = sig; S.devices = r.devices || []; S.installs = r.installs || []; S.sync = r.sync || '';
@@ -166,6 +179,8 @@ async function pollState() {
   try {
     const r = await api('/api/state');
     if (r.version && S.version && r.version !== S.version) { location.reload(); return; } // è partita una versione nuova
+    if (staleCheck(r.version)) return;
+    if (r.game && S.gameRev !== undefined && r.game.rev !== S.gameRev && !S.tour && !S.printing) { location.reload(); return; } // l'elenco dei comandi è stato ricaricato
     let changed = applyState(r);
     if (isED()) { const e = await api('/api/ed/state'); const sg = JSON.stringify([e.file, e.sync, e.devIds, e.disk]); if (sg !== S.edSig) { S.edSig = sg; changed = true; } S.ed = e; if (!S.edCmd || !Object.keys(S.edCmd).length) { S.edCmd = {}; for (const c of (e.commands || [])) S.edCmd[c.tag] = c; changed = true; } }
     if (r.profRev !== S.profRev) {
@@ -242,7 +257,7 @@ function renderHeader() {
   const sel = $('#install'), cur = curInstall();
   sel.innerHTML = S.installs.map(i => `<option value="${esc(i.path)}" ${cur && i.path === cur.path ? 'selected' : ''}>${esc(i.name)} — ${esc(i.path)}${i.launcher ? '  ★ avviato dal launcher' : ''}${i.lastRun ? '  (ultimo avvio ' + new Date(i.lastRun * 1000).toLocaleDateString('it-IT') + ')' : '  (mai avviato)'}</option>`).join('') || '<option>non trovata</option>';
   $('#layout').innerHTML = layoutNames().map(n => `<option ${n === S.profile.layout ? 'selected' : ''}>${esc(n)}</option>`).join('');
-  const sy = $('#sync'), ban = []; if (updBanner()) ban.push(updBanner());
+  const sy = $('#sync'), ban = []; if (updBanner()) ban.push(updBanner()); if (gameBanner()) ban.push(gameBanner());
   const map = { ok: ['ok', '● Il gioco è allineato'], todo: ['todo', '● Modifiche da scrivere nel gioco'], ext: ['ext', '● File del gioco cambiato fuori dall\'app'] };
   $('#game').value = S.game;
   const m = isED() ? (map[(S.ed || {}).sync] || ['', '']) : (map[S.sync] || ['', '']);
@@ -495,6 +510,96 @@ async function renderImage() {
   hint.innerHTML = S.placingMode
     ? (S.placing ? `Ora clicca sull'immagine nel punto in cui si trova <b>${esc(inputLabel(S.placing))}</b>.` : 'Premi un tasto sulla periferica (oppure 📍 nella lista a destra), poi clicca sull\'immagine dove si trova.')
     : 'Usa <b>Posiziona etichette</b> per indicare dove si trova ogni tasto. Clic su un\'etichetta per assegnare un comando; clic destro per toglierla.';
+}
+// ---------- comandi letti dal gioco: avvisi e riepilogo dei cambiamenti ----------
+function gameBanner() {
+  const g = S.gameInfo || {};
+  if (g.status === 'reading') return `<div class="info">Il gioco è alla versione <b>${esc(g.version || '')}</b>, che non avevo ancora visto: sto leggendo l'elenco dei comandi dai file del gioco. Dura qualche secondo e succede una volta sola per ogni aggiornamento del gioco.</div>`;
+  if (g.status === 'error' && S.profile.gameDataSeen !== 'err:' + g.version) return `<div class="info">Non sono riuscito a leggere i comandi dai file del gioco (versione ${esc(g.version || '?')}): uso l'elenco che ho già (${esc(g.note || '')}). Se il gioco ha comandi nuovi, qui non compaiono. Il motivo è nel registro (⋯ > Diagnostica periferiche). <button class="small" data-gdismiss="err:${esc(g.version || '')}">Ho capito</button></div>`;
+  const c = g.change;
+  if (c) return `<div class="info">I comandi sono stati letti dal gioco (versione <b>${esc(c.to)}</b>): <b>${c.added.length}</b> nuovi, <b>${c.removed.length}</b> non più presenti rispetto a prima. <button class="small" id="gchange">Vedi cosa è cambiato</button> <button class="small" data-gdismiss="${esc(c.to)}">Ho visto</button></div>`;
+  return '';
+}
+function showGameChange() {
+  const c = (S.gameInfo || {}).change; if (!c) return;
+  const gone = new Set(c.removed.map(x => actKey(x.map, x.name)));
+  const hit = S.profile.bindings.filter(b => gone.has(actKey(b.map, b.action)));
+  const list = l => l.length ? '<div class="chg">' + l.map(x => `<div><b>${esc(x.label)}</b> <span>${esc(x.mapLabel)}</span></div>`).join('') + '</div>' : '<div class="hint">Nessuno.</div>';
+  openModal(`<h2>Cosa è cambiato nei comandi del gioco</h2>
+    <div class="hint">Versione del gioco: ${esc(c.to)} · confronto con: ${esc(c.from)} · letto il ${esc(c.at)}</div>
+    ${hit.length ? `<div class="bad" style="margin:10px 0">${hit.length} tue assegnazioni puntano a comandi che il gioco non ha più: ${esc([...new Set(hit.map(b => b.action))].join(', '))}. Restano salvate nell'app ma il gioco le ignora; conviene riassegnarle a uno dei comandi nuovi.</div>` : ''}
+    <h3>Comandi nuovi (${c.added.length})</h3>${list(c.added)}
+    <div class="hint">I comandi nuovi possono comparire in inglese finché non arriva la traduzione italiana.</div>
+    <h3>Comandi non più presenti (${c.removed.length})</h3>${list(c.removed)}
+    <div class="btns"><button data-close="1">Chiudi</button><button class="primary" data-gdismiss="${esc(c.to)}" data-close="1">Ho visto, non mostrarlo più</button></div>`);
+}
+
+// ---------- guida introduttiva ----------
+const NEWS = { ver: '4.3', items: [
+  'L\'elenco dei comandi di Star Citizen ora viene letto direttamente dal gioco installato: a ogni aggiornamento del gioco l\'app si allinea da sola e ti dice quali comandi sono nuovi o spariti.',
+  'Questa guida: parte al primo avvio e dopo ogni aggiornamento, e la ritrovi nel menu ⋯ > Guida introduttiva.',
+  'Stampa / PDF dello schema di ogni periferica con i comandi assegnati (dalla 4.2).',
+  'Aggiornamento automatico del programma all\'avvio (dalla 4.1).',
+] };
+function tourSteps() {
+  const dev = (S.devices.find(d => !d.gamepad) || {}).key || Object.keys(S.profile.devices || {})[0];
+  const toAll = () => { S.view = { type: 'all' }; render(); };
+  const toDev = () => { if (dev) { S.view = { type: 'dev', key: dev }; render(); } };
+  const st = [
+    { t: 'Benvenuto in ScEd Binder', h: 'Con questo programma assegni i comandi di <b>Star Citizen</b> ed <b>Elite Dangerous</b> a joystick, manette, pedaliere e gamepad <b>senza entrare nel gioco</b>.<br><br>La guida dura un paio di minuti e ti mostra tutte le funzioni. Puoi uscire quando vuoi con «Salta la guida» e rivederla dal menu <b>⋯</b>.', pre: toAll },
+    { t: 'Gioco e installazione', sel: '#game', sel2: '#install', h: 'Qui scegli il <b>gioco</b>. Accanto, per Star Citizen, l\'<b>installazione</b> su cui lavorare (LIVE, PTU…): quella con la stella è l\'ultima avviata dal launcher. Controlla che sia quella da cui giochi davvero, altrimenti scrivi i comandi nella cartella sbagliata.' },
+    { t: 'Parti da quello che hai già', sel: '#btnImport', h: '<b>Importa dal gioco</b> carica nell\'app i comandi che hai già assegnato nel gioco, così non ricominci da zero. Al primo avvio l\'app lo fa da sola.' },
+    { t: 'Le tue periferiche', sel: '#devlist', h: 'L\'app rileva da sola le periferiche collegate. Il riquadro <b>js1, js2…</b> è il numero che ogni periferica ha nel gioco; diventa giallo quando premi qualcosa su quella periferica.<br><br>Se colleghi o scolleghi una periferica i numeri si aggiornano da soli e i comandi restano legati alla periferica giusta. Clicca una periferica per aprirla.', pre: toAll },
+    { t: 'Lo schema della periferica', sel: '.imgcol', only: 'dev', h: 'Ogni periferica ha il suo <b>schema</b> con tutti i tasti e gli assi. <b>Premi un tasto vero</b>: la casella corrispondente si illumina di giallo, così sai sempre qual è.<br><br>Clicca una casella per assegnarle un comando. Dal menu a tendina in alto puoi scegliere un altro schema, oppure caricare una tua foto e mettere tu le etichette.', pre: toDev },
+    { t: 'Assegnare un comando', sel: '.inpcol', only: 'dev', h: 'A destra c\'è l\'elenco di assi e pulsanti. <b>+ comando</b> apre la ricerca: i comandi sono tradotti in italiano, con il nome inglese accanto.<br><br>Sullo stesso tasto puoi mettere <b>più comandi</b>. Con <b>inverti</b> giri il verso di un asse, con <b>ignora</b> escludi un ingresso che disturba (per esempio un interruttore sempre acceso).', pre: toDev },
+    { t: 'Stampa o PDF', sel: '#prn', only: 'dev', h: '<b>Stampa / PDF</b> mette su un foglio A4 lo schema con i comandi assegnati, da tenere sottomano mentre giochi. Per un PDF scegli «Salva come PDF» nella finestra di stampa. Dal menu <b>⋯</b> puoi stampare tutte le periferiche insieme.', pre: toDev },
+    { t: 'Tutti i comandi', sel: '#navAll', h: 'Qui lavori al contrario: parti dal <b>comando</b>. Cercalo per nome, clicca la sua casella nella colonna dei joystick e premi il tasto (o muovi l\'asse) che vuoi usare: l\'app lo riconosce da sola.<br><br>Vedi anche i tasti predefiniti di tastiera, mouse e gamepad.', pre: toAll },
+    { t: 'Anteprima 3D della nave', sel: '#navShip', sc: true, h: 'Muovi gli stick e guarda la nave: controlli subito se beccheggio, rollio, imbardata e traslazioni rispondono come vuoi, prima di entrare in gioco. Da qui puoi anche assegnare o invertire gli assi di volo.' },
+    { t: 'Layout', sel: '#layout', sel2: '#btnLayout', h: 'Puoi tenere <b>più layout</b> con un nome (volo, mining, combattimento…) e passare dall\'uno all\'altro. Con <b>Gestisci</b> li crei, li duplichi, li rinomini e li elimini.' },
+    { t: 'Scrivere nel gioco', sel: '#btnWrite', sel2: '#sync', h: 'Quando hai finito, <b>chiudi il gioco</b> e premi <b>Scrivi nel gioco</b>. L\'app salva il file dei comandi nella cartella del gioco e prima ne fa sempre una copia di sicurezza (cartella <i>dati\\backup</i>).<br><br>La scritta accanto ti dice se il gioco è allineato o se hai modifiche ancora da scrivere.' },
+    { t: 'Il menu ⋯', sel: '#btnMenu', h: 'Nel menu trovi: anteprima del file, cartelle del gioco e dei dati, stampa di tutte le periferiche, <b>Opzioni</b>, <b>Diagnostica periferiche</b> (da mandare se qualcosa non va) e questa guida.' },
+    { t: 'Sempre aggiornato', h: '<b>Il programma</b>: all\'avvio controlla se è uscita una versione nuova, la scarica e passa da solo a quella (si disattiva dalle Opzioni).<br><br><b>I comandi di Star Citizen</b>: l\'app legge la versione del gioco installato e, quando il gioco si aggiorna, rilegge l\'elenco dei comandi dai suoi file e ti mostra quali sono nuovi o spariti. I comandi nuovi possono comparire in inglese finché non arriva la traduzione.' },
+    { t: 'Fatto!', h: 'Per cominciare: controlla l\'installazione, clicca una periferica, premi un tasto e assegnagli un comando. Poi chiudi il gioco e premi <b>Scrivi nel gioco</b>.<br><br>Buon volo! o7' },
+  ];
+  const isUpdate = S.profile.tutorialSeen && S.profile.tutorialSeen !== S.version;
+  if (isUpdate) st.unshift({ t: 'Novità della versione ' + esc(S.version), h: '<ul class="tnews">' + NEWS.items.map(x => '<li>' + x + '</li>').join('') + '</ul>Di seguito la guida completa alle funzioni: se la conosci già, premi «Salta la guida».', pre: toAll });
+  return st.filter(s => !(s.sc && isED()) && !(s.only === 'dev' && !dev));
+}
+function startTour(force) {
+  if (S.tour || $('#tour')) return;
+  if (!force && (S.profile.tutorialSeen === S.version || /[?&]notour=1/.test(location.search))) return;
+  const back = S.view, steps = tourSteps(); let i = 0;
+  const el = document.createElement('div'); el.id = 'tour';
+  el.innerHTML = '<div class="thole"></div><div class="thole"></div><div class="tcard"><div class="tstep"></div><h2></h2><div class="tbody"></div><div class="btns"><button id="tskip">Salta la guida</button><span class="grow"></span><button id="tprev">Indietro</button><button class="primary" id="tnext">Avanti</button></div></div>';
+  document.body.appendChild(el); S.tour = true;
+  const holes = $$('.thole', el), card = $('.tcard', el);
+  const done = () => { el.remove(); S.tour = false; document.removeEventListener('keydown', key, true); S.view = back; S.profile.tutorialSeen = S.version; saveProfile(); render(); };
+  const show = () => {
+    const s = steps[i]; if (s.pre) s.pre();
+    $('.tstep', el).textContent = (i + 1) + ' / ' + steps.length; $('h2', el).innerHTML = s.t; $('.tbody', el).innerHTML = s.h;
+    $('#tprev').style.visibility = i ? 'visible' : 'hidden'; $('#tnext').textContent = i === steps.length - 1 ? 'Fine' : 'Avanti';
+    let rects = [s.sel, s.sel2].map(q => { const t = q && $(q); if (!t) return null; t.scrollIntoView({ block: 'nearest' }); const r = t.getBoundingClientRect(); return r.width && r.height ? r : null; });
+    if (rects[0] && rects[1]) { // due elementi vicini: un solo riquadro che li contiene entrambi
+      const a = rects[0], b = rects[1], l = Math.min(a.left, b.left), t = Math.min(a.top, b.top), r2 = Math.max(a.right, b.right), bt = Math.max(a.bottom, b.bottom);
+      rects = [{ left: l, top: t, right: r2, bottom: bt, width: r2 - l, height: bt - t }, null];
+    }
+    holes.forEach((h, k) => { const r = rects[k]; h.style.display = r ? 'block' : 'none'; if (r) Object.assign(h.style, { left: r.left - 6 + 'px', top: r.top - 6 + 'px', width: r.width + 12 + 'px', height: r.height + 12 + 'px' }); });
+    el.classList.toggle('nohole', !rects[0]);
+    const r = rects[0], cw = Math.min(520, innerWidth - 24); card.style.width = cw + 'px';
+    const ch = card.offsetHeight; let x, y;
+    if (!r) { x = (innerWidth - cw) / 2; y = (innerHeight - ch) / 2; }
+    else {
+      x = Math.max(12, Math.min(innerWidth - cw - 12, r.left + r.width / 2 - cw / 2));
+      if (r.bottom + 16 + ch < innerHeight) y = r.bottom + 16; else if (r.top - 16 - ch > 0) y = r.top - 16 - ch;
+      else { y = Math.max(12, (innerHeight - ch) / 2); x = r.left > innerWidth - r.right ? Math.max(12, r.left - cw - 16) : Math.min(innerWidth - cw - 12, r.right + 16); }
+    }
+    card.style.left = x + 'px'; card.style.top = Math.max(12, y) + 'px';
+  };
+  const go = d => { i += d; if (i >= steps.length) return done(); if (i < 0) i = 0; show(); };
+  const key = e => { if (e.key === 'Escape') { e.preventDefault(); done(); } else if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); go(1); } else if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); } };
+  document.addEventListener('keydown', key, true);
+  el.addEventListener('click', e => { e.stopPropagation(); if (e.target.id === 'tskip') done(); else if (e.target.id === 'tnext') go(1); else if (e.target.id === 'tprev') go(-1); });
+  show();
 }
 // ---------- stampa / PDF degli schemi con i comandi assegnati ----------
 const PRN_W = 1400, PRN_PW = 1062, PRN_PH = 733; // larghezza di lavoro; area utile di un A4 orizzontale (px a 96 dpi, margini 8 mm)
@@ -1122,6 +1227,11 @@ $('#layout').onchange = e => switchLayout(e.target.value);
 document.addEventListener('click', () => { $('#menu').classList.add('hidden'); $('#lymenu').classList.add('hidden'); });
 $('#install').onchange = e => { S.profile.install = e.target.value; saveProfile().then(pollState); };
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal' || e.target.dataset.close) closeModal(); });
+document.addEventListener('click', e => {
+  const t = e.target; if (!t || !t.dataset) return;
+  if (t.id === 'gchange') showGameChange();
+  if (t.dataset.gdismiss) { S.profile.gameDataSeen = t.dataset.gdismiss; saveProfile(); if (!t.dataset.close) render(); }
+}, true);
 $('#banner').addEventListener('click', e => {
   if (e.target.dataset.b === 'import') doImport(false);
   if (e.target.dataset.b === 'write') doWrite();
@@ -1139,6 +1249,7 @@ $('#menu').addEventListener('click', async e => {
     if (a === 'savefile') doSaveFile();
     if (a === 'opengame') { if (inst) await api('/api/open', { what: 'game', path: inst.path }); }
     if (a === 'opendata') await api('/api/open', { what: 'dati' });
+    if (a === 'tour') { startTour(true); }
     if (a === 'printall') { const ks = printableKeys(); if (!ks.length) toast('Nessuna periferica ha ancora comandi assegnati.', true); else await printDevices(ks); }
     if (a === 'log') { const r = await api('/api/log'); openModal(`<h2>Diagnostica periferiche</h2><div class="en">Se una periferica non viene letta bene, copia questo testo e mandalo a chi ti ha fatto l'app.</div><pre>${esc(r.join('\n'))}\n\n${esc(JSON.stringify(S.devices, null, 1))}</pre><div class="btns"><button data-close="1">Chiudi</button></div>`); }
     if (a === 'about') openModal(`<h2>ScEd Binder v${esc(S.version)}</h2><div>Star Citizen + Elite Dangerous · github.com/Toskurim/ScEd-Binder</div><div>Comandi del gioco: ${esc(S.gameData)}</div><div>Cartella dati: ${esc(S.dataDir)}</div><div class="en">Schemi delle periferiche: progetto open source Joystick Diagrams (github.com/Rexeh/joystick-diagrams, licenza GPL-2.0). Traduzione di base dei comandi: comunità italiana di Star Citizen (progetto StarCitizen-Localization), riveduta. Regole di numerazione dei joystick: osservazioni del progetto BindSight. Star Citizen è un marchio di Cloud Imperium Games, Elite Dangerous di Frontier Developments; questa app non è affiliata a nessuno dei due.</div><div class="btns"><button data-close="1">Chiudi</button></div>`);

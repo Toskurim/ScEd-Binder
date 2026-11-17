@@ -183,3 +183,19 @@ body.prn-measure .devwrap,body.prn-measure main,body.prn-measure #view{overflow:
   #printroot{display:block!important}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+
+/* ---- comandi letti dal gioco ---- */
+.chg{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0}
+.chg div{padding:3px 0;border-bottom:1px solid var(--line)}.chg div:last-child{border:0}
+.chg span{color:var(--dim);font-size:12px;margin-left:6px}
+/* ---- guida introduttiva ---- */
+#tour{position:fixed;inset:0;z-index:9000}
+#tour.nohole{background:rgba(4,8,14,.78)}
+.thole{position:fixed;border-radius:10px;border:2px solid #ffcc33;box-shadow:0 0 0 4px rgba(255,204,51,.25);pointer-events:none;display:none}
+.thole:first-child{box-shadow:0 0 0 9999px rgba(4,8,14,.78),0 0 0 4px rgba(255,204,51,.25)}
+.tcard{position:fixed;background:var(--panel);border:1px solid var(--acc);border-radius:12px;padding:16px 18px;box-shadow:0 18px 60px #000c;line-height:1.5}
+.tcard h2{margin:2px 0 8px;font-size:19px}
+.tstep{color:var(--dim);font-size:12px}
+.tcard .btns{display:flex;gap:8px;margin-top:14px;align-items:center}
+.tcard .grow{flex:1}
+.tnews{margin:0 0 10px;padding-left:18px}.tnews li{margin:4px 0}

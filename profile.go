@@ -63,6 +63,8 @@ type Profile struct {
 	Install         string              `json:"install"`
 	CustomRoot      string              `json:"customRoot"`
 	Imported        bool                `json:"imported"`
+	GameDataSeen    string              `json:"gameDataSeen"` // versione del gioco di cui l'utente ha già visto il riepilogo dei cambiamenti
+	TutorialSeen    string              `json:"tutorialSeen"` // versione del programma di cui ha già visto la guida
 	NoAutoUpdate    bool                `json:"noAutoUpdate"` // non cercare e installare gli aggiornamenti all'avvio
 	OrderManual     bool                `json:"orderManual"`  // ordine scelto a mano con le frecce (altrimenti segue quello del gioco)
 	Layouts         []Layout            `json:"layouts"`      // layout salvati (assegnazioni + inversioni); quello attivo è anche in Bindings
@@ -427,6 +429,7 @@ func importActionMaps(data []byte, old *Profile) (*Profile, error) {
 	p.Layout = old.Layout
 	p.OrderManual = old.OrderManual
 	p.NoAutoUpdate = old.NoAutoUpdate
+	p.GameDataSeen, p.TutorialSeen = old.GameDataSeen, old.TutorialSeen
 	p.ED = old.ED
 	p.Game = old.Game
 	p.Imported = true
@@ -664,7 +667,7 @@ func (p *Profile) buildXML(connected []Device) (string, WriteStats) {
 		st.Written++
 	}
 	if p.ClearJSDefaults && len(js) > 0 {
-		for _, am := range actionMaps {
+		for _, am := range getMaps() {
 			for _, a := range am.Actions {
 				k := key{a.Map, a.Name}
 				if a.DefJS != "" && !hasJS[k] {
@@ -704,7 +707,7 @@ func (p *Profile) buildXML(connected []Device) (string, WriteStats) {
 	for k := range byAct {
 		rest[k.m] = append(rest[k.m], k.a)
 	}
-	for _, am := range actionMaps {
+	for _, am := range getMaps() {
 		names := []string{}
 		known := map[string]bool{}
 		for _, a := range am.Actions {
@@ -788,7 +791,7 @@ func signature(data []byte) string {
 			lines = append(lines, fmt.Sprintf("dev %d %s", o.Instance, productGUID(o.Product)))
 			_, inv := extractInvert(o.Inner)
 			for g, v := range inv {
-				if v != invertDefaults[g] {
+				if v != getInvertDefaults()[g] {
 					lines = append(lines, fmt.Sprintf("inv %d %s %v", o.Instance, g, v))
 				}
 			}

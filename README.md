@@ -23,6 +23,8 @@ Per **Elite Dangerous** (dalla versione 3.0, ancora da collaudare in gioco) gest
 - Anteprima 3D dei movimenti della nave.
 - Scrive `actionmaps.xml` nella cartella del gioco (con copia di sicurezza).
 - Le assegnazioni sono legate alla periferica, non al numero `jsN`: se aggiungi o togli una periferica la numerazione viene ricalcolata.
+- Segue gli aggiornamenti di Star Citizen da solo: legge la versione del gioco installato e, quando cambia, rilegge l'elenco dei comandi dai file del gioco (`Data.p4k`) e mostra quali sono nuovi o spariti.
+- Guida introduttiva a passi, al primo avvio e dopo ogni aggiornamento.
 - Stampa o salva in PDF lo schema di ogni periferica con i comandi assegnati, da tenere sottomano mentre giochi.
 - Aggiornamento automatico: all'avvio controlla l'ultima versione pubblicata qui su GitHub, scarica il nuovo `.exe` accanto a quello in uso, ne verifica l'impronta SHA-256 e passa alla nuova versione (si disattiva dalle Opzioni).
 

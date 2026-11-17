@@ -4,10 +4,12 @@ import (
 	"embed"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 //go:embed data/defaultProfile.xml data/labels_en.json data/labels_it.json
@@ -47,14 +49,37 @@ type xOptGroup struct {
 // invertDefaults: gruppi invertibili per i joystick -> valore predefinito del gioco
 var invertDefaults = map[string]bool{}
 
-func walkOpt(g xOptGroup) {
+func walkOpt(g xOptGroup, inv map[string]bool) {
 	if g.ShowInvert == "1" && g.Name != "" {
-		invertDefaults[g.Name] = g.Invert == "1"
+		inv[g.Name] = g.Invert == "1"
 	}
 	for _, c := range g.Groups {
-		walkOpt(c)
+		walkOpt(c, inv)
 	}
 }
+
+// L'elenco dei comandi può essere ricaricato mentre il programma gira (quando arriva quello letto dal gioco):
+// chi lo usa ne prende una copia del riferimento con getMaps(); l'elenco non viene mai modificato sul posto.
+var actMu sync.RWMutex
+
+func getMaps() []ActionMap { actMu.RLock(); defer actMu.RUnlock(); return actionMaps }
+func getInvertDefaults() map[string]bool {
+	actMu.RLock()
+	defer actMu.RUnlock()
+	return invertDefaults
+}
+func getGameDataNote() string { actMu.RLock(); defer actMu.RUnlock(); return gameDataNote }
+
+// gameSource: comandi e nomi letti dal gioco installato (nil = uso quelli integrati nel programma)
+type gameSource struct {
+	XML     []byte
+	EN      map[string]string // etichette inglesi lette dal gioco (chiave minuscola)
+	ITLocal map[string]string // traduzione italiana installata nel gioco, se c'è
+	Note    string
+}
+
+var gameSrc *gameSource
+var onlineIT map[string]string // traduzioni italiane aggiornate scaricate da GitHub
 
 type xDefProfile struct {
 	Trees []struct {
@@ -81,17 +106,34 @@ var axisHint = regexp.MustCompile(`(?i)^(x|y|z|rot[xyz]|slider\d|thumb[lr][xy]?$
 
 func loadActions() error {
 	xmlData, _ := dataFS.ReadFile("data/defaultProfile.xml")
-	gameDataNote = "Star Citizen Alpha 4.10.2 (integrato)"
-	// un defaultProfile.xml più recente messo in "dati" ha la precedenza
-	if b, err := os.ReadFile(filepath.Join(dataDir(), "defaultProfile.xml")); err == nil && len(b) > 1000 {
-		xmlData = b
-		gameDataNote = "defaultProfile.xml personalizzato (cartella dati)"
-	}
+	note := "Star Citizen Alpha 4.10.2 (integrato nel programma)"
 	en, it := map[string]string{}, map[string]string{}
 	b, _ := dataFS.ReadFile("data/labels_en.json")
 	json.Unmarshal(b, &en)
 	b, _ = dataFS.ReadFile("data/labels_it.json")
 	json.Unmarshal(b, &it)
+	actMu.RLock()
+	src, online := gameSrc, onlineIT
+	actMu.RUnlock()
+	if src != nil && len(src.XML) > 1000 {
+		xmlData, note = src.XML, src.Note
+		for k, v := range src.EN {
+			en[k] = v
+		}
+		for k, v := range src.ITLocal { // solo per le voci che la traduzione integrata non ha
+			if _, ok := it[k]; !ok && v != "" {
+				it[k] = v
+			}
+		}
+	}
+	for k, v := range online {
+		it[k] = v
+	}
+	// un defaultProfile.xml messo a mano in "dati" ha la precedenza su tutto
+	if b, err := os.ReadFile(filepath.Join(dataDir(), "defaultProfile.xml")); err == nil && len(b) > 1000 {
+		xmlData = b
+		note = "defaultProfile.xml personalizzato (cartella dati)"
+	}
 	if b, err := os.ReadFile(filepath.Join(dataDir(), "traduzioni.json")); err == nil {
 		extra := map[string]string{}
 		if json.Unmarshal(b, &extra) == nil {
@@ -110,11 +152,12 @@ func loadActions() error {
 	if err := xml.Unmarshal(xmlData, &p); err != nil {
 		return err
 	}
-	actionMaps = nil
+	var maps []ActionMap
+	inv := map[string]bool{}
 	for _, t := range p.Trees {
 		if t.Type == "joystick" {
 			for _, g := range t.Groups {
-				walkOpt(g)
+				walkOpt(g, inv)
 			}
 		}
 	}
@@ -152,7 +195,7 @@ func loadActions() error {
 				a.Desc = tr(at["UIDescription"], en)
 			}
 			a.OptGroup = at["optionGroup"]
-			_, a.CanInvert = invertDefaults[a.OptGroup]
+			_, a.CanInvert = inv[a.OptGroup]
 			a.DefKB = strings.TrimSpace(at["keyboard"])
 			a.DefMo = strings.TrimSpace(at["mouse"])
 			a.DefJS = strings.TrimSpace(at["joystick"])
@@ -175,13 +218,22 @@ func loadActions() error {
 			}
 			am.Actions = append(am.Actions, a)
 		}
-		actionMaps = append(actionMaps, am)
+		maps = append(maps, am)
 	}
-	for i := range actionMaps {
-		for j := range actionMaps[i].Actions {
-			a := &actionMaps[i].Actions[j]
-			actionIndex[a.Map+"/"+a.Name] = a
+	n := 0
+	idx := map[string]*Action{}
+	for i := range maps {
+		for j := range maps[i].Actions {
+			a := &maps[i].Actions[j]
+			idx[a.Map+"/"+a.Name] = a
+			n++
 		}
 	}
+	if n < 200 {
+		return fmt.Errorf("l'elenco dei comandi contiene solo %d voci: scartato", n)
+	}
+	actMu.Lock()
+	actionMaps, actionIndex, invertDefaults, gameDataNote = maps, idx, inv, note
+	actMu.Unlock()
 	return nil
 }

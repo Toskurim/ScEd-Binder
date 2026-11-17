@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"embed"
 	"encoding/hex"
@@ -20,7 +21,7 @@ import (
 	"time"
 )
 
-const appVersion = "4.2"
+const appVersion = "4.3"
 const listenAddr = "127.0.0.1:47811"
 
 //go:embed web
@@ -88,6 +89,7 @@ func main() {
 	loadPhotoDevices()
 	loadEDCommands()
 	loadProfile()
+	startGameData()
 	startDevices()
 	routes()
 	startUpdateCheck()
@@ -197,6 +199,25 @@ type devOut struct {
 	JS int `json:"js"`
 }
 
+// aggiunge allo stato le informazioni sui comandi letti dal gioco e, ogni tanto, ricontrolla la versione installata
+var lastGameCheck time.Time
+
+func withGame(st map[string]any) map[string]any {
+	if p, _ := st["selInstall"].(string); p != "" {
+		gdMu.Lock()
+		due := gdPath != p || time.Since(lastGameCheck) > 30*time.Second
+		if due {
+			lastGameCheck = time.Now()
+		}
+		gdMu.Unlock()
+		if due {
+			go syncGameData(p)
+		}
+	}
+	st["game"] = gameState()
+	return st
+}
+
 func currentState() map[string]any {
 	connected := hub.list()
 	profMu.Lock()
@@ -204,8 +225,10 @@ func currentState() map[string]any {
 	installs := findInstalls(profile)
 	sel := selectedInstall(installs)
 	logProd := map[string][]string{}
+	selPath := ""
 	if sel != nil {
 		logProd = gameLogProducts(sel.Path)
+		selPath = sel.Path
 	}
 	changed := profile.ensureDevices(connected, logProd)
 	var disk []byte
@@ -248,7 +271,7 @@ func currentState() map[string]any {
 	for _, d := range connected {
 		out = append(out, devOut{d, num[d.Key]})
 	}
-	return map[string]any{"devices": out, "installs": installs, "profRev": profRev, "sync": sync, "gameOrder": gameOrder, "version": appVersion, "advanced": profile.advancedSummary(), "devWarn": hub.warning(), "update": getUpd()}
+	return map[string]any{"devices": out, "installs": installs, "profRev": profRev, "sync": sync, "gameOrder": gameOrder, "version": appVersion, "advanced": profile.advancedSummary(), "devWarn": hub.warning(), "update": getUpd(), "selInstall": selPath}
 }
 
 func selectedInstall(installs []Install) *Install {
@@ -288,6 +311,16 @@ func templateNames() []string {
 func routes() {
 	sub, _ := fs.Sub(webFS, "web")
 	static := http.FileServer(http.FS(sub))
+	http.HandleFunc("/app.js", func(w http.ResponseWriter, r *http.Request) {
+		b, err := fs.ReadFile(sub, "app.js")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write(bytes.Replace(b, []byte("__APPVER__"), []byte(appVersion), 1))
+	})
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		static.ServeHTTP(w, r)
@@ -349,21 +382,21 @@ func routes() {
 	})
 
 	http.HandleFunc("/api/boot", guard(func(w http.ResponseWriter, r *http.Request) {
-		st := currentState()
+		st := withGame(currentState())
 		profMu.Lock()
 		st["profile"] = profile
 		profMu.Unlock()
 		st["version"] = appVersion
-		st["gameData"] = gameDataNote
-		st["maps"] = actionMaps
+		st["gameData"] = getGameDataNote()
+		st["maps"] = getMaps()
 		st["templates"] = templateNames()
-		st["invertDefaults"] = invertDefaults
+		st["invertDefaults"] = getInvertDefaults()
 		st["photoDevices"] = photoDevices
 		st["dataDir"] = dataDir()
 		writeJSON(w, st)
 	}))
 	http.HandleFunc("/api/state", guard(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, currentState())
+		writeJSON(w, withGame(currentState()))
 	}))
 	http.HandleFunc("/api/input", guard(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"d": hub.snapshot(), "gp": hub.gamepad()})
