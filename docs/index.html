@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ScEd Binder: i comandi di Star Citizen ed Elite Dangerous senza entrare nel gioco</title>
+<meta name="description" content="Programma gratuito per Windows che assegna i comandi di Star Citizen ed Elite Dangerous a joystick, manette, pedaliere e gamepad senza avviare il gioco. In italiano, open source.">
+<meta property="og:title" content="ScEd Binder">
+<meta property="og:description" content="Assegna i comandi di Star Citizen ed Elite Dangerous a joystick, manette e pedaliere senza entrare nel gioco. Gratuito, in italiano.">
+<meta property="og:image" content="https://toskurim.github.io/ScEd-Binder/img/schema.webp">
+<meta property="og:type" content="website">
+<link rel="icon" href="img/icona.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --vuoto:#0b1220; --scafo:#121c2e; --scafo2:#18253b; --linea:#26354e;
+  --testo:#e4ebf5; --tenue:#93a3ba; --hud:#3aa0ff; --segnale:#ffd23f;
+  --tit:"Chakra Petch","Segoe UI",system-ui,sans-serif;
+  --txt:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --col:1120px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--vuoto);color:var(--testo);font:17px/1.6 var(--txt);-webkit-font-smoothing:antialiased}
+img,video{max-width:100%;height:auto;display:block}
+a{color:var(--hud)}
+a:focus-visible,button:focus-visible,summary:focus-visible,.tasto:focus-visible{outline:3px solid var(--segnale);outline-offset:3px;border-radius:6px}
+.fascia{padding:clamp(56px,9vw,104px) 24px}
+.dentro{max-width:var(--col);margin:0 auto}
+h1,h2,h3{font-family:var(--tit);font-weight:700;line-height:1.12;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(2.3rem,5vw,3.9rem);max-width:13ch}
+h2{font-size:clamp(1.7rem,3.4vw,2.6rem);max-width:22ch}
+h3{font-size:1.3rem;font-weight:600}
+p{margin:0}
+.sotto{color:var(--tenue);font-size:1.15rem;max-width:58ch;margin-top:18px}
+
+/* barra in alto */
+.barra{display:flex;align-items:center;gap:14px;max-width:var(--col);margin:0 auto;padding:18px 24px}
+.barra img{width:38px;height:38px;border-radius:9px}
+.barra b{font-family:var(--tit);font-size:1.25rem;letter-spacing:.01em}
+.barra nav{margin-left:auto;display:flex;gap:22px;font-size:.95rem}
+.barra nav a{color:var(--tenue);text-decoration:none}
+.barra nav a:hover{color:var(--testo)}
+@media (max-width:620px){.barra nav a:not(:last-child){display:none}}
+
+/* apertura */
+.apertura{padding:clamp(28px,5vw,64px) 24px clamp(40px,6vw,72px);background:
+  radial-gradient(1200px 520px at 78% -8%,rgba(58,160,255,.20),transparent 62%),
+  linear-gradient(180deg,#0d1730 0%,var(--vuoto) 78%)}
+.azioni{display:flex;flex-wrap:wrap;gap:14px 20px;align-items:center;margin-top:34px}
+.scarica{display:inline-flex;flex-direction:column;gap:2px;background:var(--segnale);color:#161200;text-decoration:none;padding:15px 26px 14px;border-radius:10px;font-family:var(--tit);font-weight:700;font-size:1.2rem;box-shadow:0 10px 34px rgba(255,210,63,.22);transition:transform .15s,box-shadow .15s}
+.scarica:hover{transform:translateY(-2px);box-shadow:0 14px 40px rgba(255,210,63,.32)}
+.scarica small{font-family:var(--txt);font-weight:500;font-size:.82rem;opacity:.78}
+.secondaria{color:var(--testo);text-decoration:none;border-bottom:1px solid var(--linea);padding-bottom:2px}
+.secondaria:hover{border-color:var(--hud)}
+.nota{color:var(--tenue);font-size:.95rem;margin-top:16px}
+
+/* la prova dal vivo: premi un tasto, si illumina la casella */
+.testa{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:clamp(28px,5vw,72px);align-items:center}
+@media (max-width:980px){.testa{grid-template-columns:minmax(0,1fr)}}
+.prova{border:1px solid var(--linea);border-radius:16px;background:var(--scafo);padding:22px 22px 20px}
+.prova p{color:var(--tenue);font-size:1rem;margin-bottom:16px}
+.prova p b{color:var(--testo);font-weight:600}
+.tasti{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tasto{font:inherit;text-align:left;color:var(--testo);background:#0d1626;border:1.5px solid var(--linea);border-radius:10px;padding:10px 12px;cursor:pointer;overflow-wrap:anywhere;transition:background .12s,border-color .12s,color .12s,box-shadow .12s;min-height:74px}
+.tasto i{display:block;font-style:normal;font-family:var(--tit);font-weight:600;font-size:.82rem;color:var(--tenue)}
+.tasto kbd{font:inherit;display:inline-block;min-width:1.5em;text-align:center;margin-right:7px;padding:0 4px;border:1px solid currentColor;border-radius:4px;opacity:.85}
+.tasto span{display:block;font-size:.93rem;line-height:1.25;margin-top:3px}
+.tasto.acceso{background:var(--segnale);border-color:var(--segnale);color:#161200;box-shadow:0 0 26px rgba(255,210,63,.45)}
+.tasto.acceso i{color:#4a3d00}
+
+.finestra{margin-top:clamp(36px,6vw,64px);border:1px solid var(--linea);border-radius:14px;overflow:hidden;box-shadow:0 30px 90px rgba(0,0,0,.55);background:#0e1522}
+
+/* perché serve */
+.perche{display:grid;gap:0;margin-top:44px;border-top:1px solid var(--linea)}
+.riga{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:clamp(18px,4vw,56px);padding:28px 0;border-bottom:1px solid var(--linea)}
+.riga h3{color:var(--tenue);font-weight:500}
+.riga p{font-size:1.08rem}
+@media (max-width:760px){.riga{grid-template-columns:minmax(0,1fr);gap:8px}}
+
+/* funzioni con schermata */
+.funz{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:clamp(24px,5vw,64px);align-items:center;margin-top:clamp(48px,7vw,88px)}
+.funz.gira{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
+.funz.gira>.testo{order:2}
+.funz .testo p{color:var(--tenue);margin-top:14px;max-width:46ch}
+.funz ul{margin:16px 0 0;padding:0;list-style:none;color:var(--testo)}
+.funz li{padding:7px 0 7px 26px;position:relative;border-top:1px solid var(--linea);font-size:1rem}
+.funz li::before{content:"";position:absolute;left:4px;top:17px;width:9px;height:9px;border-radius:2px;background:var(--segnale)}
+.funz .finestra{margin-top:0}
+.funz .finestra.stretta{max-width:470px;margin-left:auto;margin-right:auto}
+.funz .foglio{background:#fff;border-radius:6px;box-shadow:0 26px 70px rgba(0,0,0,.6);max-width:min(400px,84%);margin:0 auto;transform:rotate(-1.5deg)}
+@media (max-width:900px){.funz{grid-template-columns:minmax(0,1fr)}.funz.gira>.testo{order:0}}
+
+/* aggiornamenti */
+.chiara{background:var(--scafo)}
+.due{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(24px,4vw,56px);margin-top:40px}
+.due p{color:var(--tenue);margin-top:10px}
+@media (max-width:760px){.due{grid-template-columns:minmax(0,1fr)}}
+
+/* passi */
+.passi{counter-reset:p;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px;margin:44px 0 0;padding:0;list-style:none}
+.passi li{counter-increment:p;border-top:2px solid var(--hud);padding-top:16px}
+.passi li::before{content:counter(p);font-family:var(--tit);font-weight:700;font-size:2.2rem;color:var(--hud);display:block;line-height:1}
+.passi b{display:block;font-family:var(--tit);font-size:1.1rem;margin:10px 0 6px}
+.passi span{color:var(--tenue);font-size:.98rem}
+@media (max-width:900px){.passi{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.passi{grid-template-columns:minmax(0,1fr)}}
+
+/* video */
+.video{margin-top:36px;border:1px solid var(--linea);border-radius:14px;overflow:hidden;background:#000}
+.video video{width:100%;height:auto}
+
+/* stato dei giochi */
+.giochi{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;margin-top:40px}
+.gioco{border:1px solid var(--linea);border-radius:14px;padding:24px;background:var(--vuoto)}
+.gioco .stato{display:inline-block;font-size:.85rem;font-weight:600;padding:3px 10px;border-radius:999px;margin-bottom:12px}
+.gioco .ok{background:rgba(57,194,122,.16);color:#6fe0a3}
+.gioco .prova2{background:rgba(255,210,63,.14);color:var(--segnale)}
+.gioco p{color:var(--tenue);margin-top:10px}
+@media (max-width:760px){.giochi{grid-template-columns:minmax(0,1fr)}}
+
+/* domande */
+.domande{margin-top:36px;max-width:820px}
+details{border-top:1px solid var(--linea);padding:4px 0}
+details:last-child{border-bottom:1px solid var(--linea)}
+summary{cursor:pointer;list-style:none;padding:16px 34px 16px 0;font-family:var(--tit);font-weight:600;font-size:1.12rem;position:relative}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";position:absolute;right:4px;top:11px;font-size:1.6rem;color:var(--hud);font-weight:500}
+details[open] summary::after{content:"−"}
+details p{color:var(--tenue);padding:0 0 18px;max-width:70ch}
+
+/* chiusura */
+.chiusura{text-align:center;background:radial-gradient(900px 420px at 50% 120%,rgba(58,160,255,.18),transparent 65%)}
+.chiusura h2{margin:0 auto}
+.chiusura .azioni{justify-content:center}
+footer{border-top:1px solid var(--linea);padding:28px 24px 44px;color:var(--tenue);font-size:.9rem}
+footer .dentro{display:grid;gap:10px}
+footer a{color:var(--tenue)}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.scarica,.tasto{transition:none}}
+</style>
+</head>
+<body>
+
+<header class="barra">
+  <img src="img/icona.png" alt="" width="38" height="38">
+  <b>ScEd Binder</b>
+  <nav aria-label="Sezioni">
+    <a href="#funzioni">Cosa fa</a>
+    <a href="#video">Video</a>
+    <a href="#domande">Domande</a>
+    <a href="https://github.com/Toskurim/ScEd-Binder">GitHub</a>
+  </nav>
+</header>
+
+<main>
+<section class="apertura">
+  <div class="dentro">
+    <div class="testa">
+      <div>
+        <h1>Assegna i comandi senza entrare nel gioco.</h1>
+        <p class="sotto">Per Star Citizen ed Elite Dangerous. ScEd Binder riconosce joystick, manette, pedaliere e gamepad, ti mostra ogni periferica con i suoi tasti e scrive lui il file dei comandi. In italiano, gratuito, per Windows.</p>
+        <div class="azioni">
+          <a class="scarica" id="scarica" href="https://github.com/Toskurim/ScEd-Binder/releases/latest">
+            <span id="scaricaTesto">Scarica ScEd Binder per Windows</span>
+            <small id="scaricaNota">ultima versione, dalla pagina delle release</small>
+          </a>
+          <a class="secondaria" href="#video">Guarda il video</a>
+        </div>
+        <p class="nota">Un solo file .exe: non installa nulla e non tocca i file del gioco, solo quello dei tuoi comandi.</p>
+      </div>
+      <div class="prova" aria-label="Prova dal vivo">
+        <p><b>Provalo qui.</b> Premi un numero da 1 a 6 sulla tastiera, o tocca una casella: nel programma succede lo stesso con i tasti veri del tuo joystick.</p>
+        <div class="tasti" id="tasti">
+          <button class="tasto" data-k="1"><i><kbd>1</kbd>Grilletto</i><span>Fuoco, gruppo armi 1</span></button>
+          <button class="tasto" data-k="2"><i><kbd>2</kbd>Pulsante 2</i><span>Lancia missili</span></button>
+          <button class="tasto" data-k="3"><i><kbd>3</kbd>Hat su</i><span>Scudi in avanti</span></button>
+          <button class="tasto" data-k="4"><i><kbd>4</kbd>Pulsante 4</i><span>Carrello di atterraggio</span></button>
+          <button class="tasto" data-k="5"><i><kbd>5</kbd>Pulsante 5</i><span>Contromisure</span></button>
+          <button class="tasto" data-k="6"><i><kbd>6</kbd>Pulsante 6</i><span>Viaggio quantum</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="finestra"><img src="img/schema.webp" width="1600" height="933" alt="La pagina di una periferica in ScEd Binder: a sinistra l'elenco dei joystick con il loro numero nel gioco, al centro lo schema dello stick con i comandi assegnati, a destra l'elenco dei pulsanti con quello premuto evidenziato in giallo"></div>
+  </div>
+</section>
+
+<section class="fascia" id="perche">
+  <div class="dentro">
+    <h2>Tre cose che nel gioco fanno perdere le serate.</h2>
+    <div class="perche">
+      <div class="riga"><h3>L'elenco dei comandi è infinito, in inglese, e la periferica non la vedi.</h3><p>Qui vedi lo schema del tuo stick o della tua manetta. Premi un tasto vero e si illumina la casella giusta; cerchi il comando in italiano e lo assegni.</p></div>
+      <div class="riga"><h3>Stacchi una periferica e i comandi finiscono sullo stick sbagliato.</h3><p>Windows rinumera i joystick (js1, js2…) e il gioco si confonde. ScEd Binder lega ogni comando alla periferica, non al numero: quando la numerazione cambia, sistema tutto lui.</p></div>
+      <div class="riga"><h3>Curve, zone morte e inversioni saltano insieme ai numeri.</h3><p>Le impostazioni avanzate del joystick restano agganciate alla periferica a cui appartengono, anche le curve personalizzate.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="fascia chiara" id="funzioni">
+  <div class="dentro">
+    <h2>Quello che fa, schermata per schermata.</h2>
+
+    <div class="funz">
+      <div class="testo">
+        <h3>Lo schema di ogni periferica</h3>
+        <p>60 modelli con la foto del produttore e 45 schemi disegnati: VKB, Virpil, Thrustmaster, Logitech, WinWing, MOZA, Honeycomb, MFG e altri.</p>
+        <ul>
+          <li>Il tasto che premi si illumina sullo schema e nell'elenco</li>
+          <li>Più comandi sullo stesso tasto, doppio tocco, tieni premuto</li>
+          <li>Inverti un asse o ignora un ingresso con un clic</li>
+          <li>Se il tuo modello non c'è, carichi una foto e metti tu le etichette</li>
+        </ul>
+      </div>
+      <div class="finestra stretta"><img loading="lazy" src="img/dettaglio.webp" width="770" height="860" alt="Particolare dello schema di uno stick: ogni tasto ha la sua casella con il comando assegnato, e quella del tasto premuto è gialla"></div>
+    </div>
+
+    <div class="funz gira">
+      <div class="testo">
+        <h3>Ogni comando ha un nome in italiano</h3>
+        <p>Oltre 750 comandi di Star Citizen tradotti, con il nome inglese accanto. Li cerchi per nome, vedi i tasti predefiniti di tastiera e gamepad, e puoi partire dal comando: clicchi la casella e premi il tasto che vuoi usare.</p>
+      </div>
+      <div class="finestra"><img loading="lazy" src="img/comandi.webp" width="1600" height="933" alt="L'elenco di tutti i comandi con la ricerca: nomi in italiano, nome inglese sotto, e le colonne di tastiera, joystick e gamepad"></div>
+    </div>
+
+    <div class="funz">
+      <div class="testo">
+        <h3>Anteprima 3D della nave</h3>
+        <p>Muovi gli stick e la nave risponde. Controlli beccheggio, rollio, imbardata e traslazioni prima di decollare, e inverti un asse se va al contrario.</p>
+      </div>
+      <div class="finestra"><img loading="lazy" src="img/nave.webp" width="1600" height="933" alt="L'anteprima 3D: una nave stilizzata inclinata secondo la posizione dello stick, con le barre dei sei movimenti di volo"></div>
+    </div>
+
+    <div class="funz gira">
+      <div class="testo">
+        <h3>Stampa o PDF da tenere sottomano</h3>
+        <p>Lo schema di ogni periferica con i comandi assegnati, su un foglio A4. Una pagina per periferica, anche tutte insieme.</p>
+      </div>
+      <div><img class="foglio" loading="lazy" src="img/stampa.webp" width="900" height="1273" alt="Un foglio A4 stampato dal programma: lo schema di uno stick con il nome del comando in ogni casella"></div>
+    </div>
+
+    <div class="funz">
+      <div class="testo">
+        <h3>Una guida che ti accompagna</h3>
+        <p>Al primo avvio una guida a passi ti mostra ogni funzione evidenziando il punto dello schermo di cui parla. Dopo ogni aggiornamento ti dice cosa è cambiato.</p>
+        <ul>
+          <li>Layout con un nome: volo, mining, combattimento</li>
+          <li>Copia di sicurezza del file del gioco a ogni scrittura</li>
+        </ul>
+      </div>
+      <div class="finestra"><img loading="lazy" src="img/guida.webp" width="1600" height="933" alt="La guida introduttiva: lo schermo è scurito tranne lo schema della periferica, con accanto una scheda che spiega come usarlo"></div>
+    </div>
+  </div>
+</section>
+
+<section class="fascia">
+  <div class="dentro">
+    <h2>Si tiene aggiornato da solo.</h2>
+    <div class="due">
+      <div><h3>Il programma</h3><p>All'avvio controlla se è uscita una versione nuova, la scarica, verifica che il file sia integro e passa a quella. Le tue assegnazioni restano. Se preferisci, lo disattivi dalle opzioni.</p></div>
+      <div><h3>I comandi di Star Citizen</h3><p>Quando il gioco si aggiorna, ScEd Binder rilegge l'elenco dei comandi direttamente dai file del gioco installato e ti mostra quali sono nuovi, quali sono spariti e quali tue assegnazioni vanno riviste.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="fascia chiara">
+  <div class="dentro">
+    <h2>Come si usa.</h2>
+    <ol class="passi">
+      <li><b>Scarica e avvia</b><span>Metti il file .exe in una cartella tua e aprilo. Accanto crea la cartella "dati" con le tue assegnazioni.</span></li>
+      <li><b>Importa dal gioco</b><span>Controlla che l'installazione sia quella da cui giochi. L'app carica i comandi che hai già, così non parti da zero.</span></li>
+      <li><b>Premi e assegna</b><span>Clicca una periferica, premi il tasto che vuoi usare, scegli il comando. Oppure parti dal comando e premi il tasto.</span></li>
+      <li><b>Scrivi nel gioco</b><span>Chiudi il gioco e premi "Scrivi nel gioco". Al prossimo avvio i comandi sono già lì.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="fascia" id="video">
+  <div class="dentro">
+    <h2>Un minuto e mezzo di video.</h2>
+    <p class="sotto">Senza audio, con le didascalie. È girato con una delle prime versioni: oggi il programma fa qualcosa in più.</p>
+    <div class="video"><video controls preload="none" poster="img/video.webp" width="1920" height="1080"><source src="ScEd_Binder_demo.mp4" type="video/mp4">Il tuo browser non mostra i video: <a href="ScEd_Binder_demo.mp4">scarica il file</a>.</video></div>
+  </div>
+</section>
+
+<section class="fascia chiara">
+  <div class="dentro">
+    <h2>A che punto è, gioco per gioco.</h2>
+    <div class="giochi">
+      <div class="gioco"><span class="stato ok">Provato in gioco</span><h3>Star Citizen</h3><p>Tutti i comandi assegnabili, tradotti in italiano. Joystick, manette, pedaliere, volanti; tastiera, mouse e gamepad nell'elenco completo. Anteprima 3D, layout, impostazioni avanzate conservate.</p></div>
+      <div class="gioco"><span class="stato prova2">Prima versione, in collaudo</span><h3>Elite Dangerous</h3><p>Joystick, manette e pedaliere, con i comandi in inglese e la traduzione sotto. Tastiera e mouse vengono conservati ma non modificati. Se lo provi, il tuo riscontro è prezioso.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="fascia" id="domande">
+  <div class="dentro">
+    <h2>Domande frequenti.</h2>
+    <div class="domande">
+      <details><summary>Windows dice "PC protetto da Windows". È normale?</summary><p>Sì. Il programma è amatoriale e non ha una firma digitale a pagamento, quindi al primo avvio Windows avvisa. Clicca "Ulteriori informazioni" e poi "Esegui comunque". Il codice sorgente è pubblico e chiunque può controllarlo.</p></details>
+      <details><summary>Tocca i file del gioco? Rischio qualcosa?</summary><p>Scrive solo il file dei tuoi comandi, lo stesso che il gioco scrive quando li cambi dal menu, e prima ne salva sempre una copia nella cartella "dati\backup". Dall'archivio del gioco legge soltanto l'elenco dei comandi, senza modificare nulla.</p></details>
+      <details><summary>Devo tenere il gioco chiuso?</summary><p>Solo nel momento in cui premi "Scrivi nel gioco". Star Citizen, quando esci, riscrive il suo file dei comandi e cancellerebbe le tue modifiche.</p></details>
+      <details><summary>Curve e zone morte si regolano dall'app?</summary><p>Non ancora. Si regolano dal gioco; l'app le legge, le conserva e le tiene legate alla periferica giusta quando la numerazione cambia.</p></details>
+      <details><summary>La mia periferica non ha lo schema. Posso usarlo lo stesso?</summary><p>Sì. La periferica viene comunque rilevata con tutti i tasti e gli assi. Puoi caricare una tua immagine, mettere le etichette dove vuoi ed esportare lo schema per chi ha il tuo stesso modello.</p></details>
+      <details><summary>Ho trovato un errore. A chi lo dico?</summary><p>Apri una segnalazione nella pagina <a href="https://github.com/Toskurim/ScEd-Binder/issues">Issues</a> del progetto, allegando il testo che trovi nel programma in "⋯ &gt; Diagnostica periferiche" e, se puoi, una schermata.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="fascia chiusura">
+  <div class="dentro">
+    <h2>Stasera vola, invece di rifare i binding.</h2>
+    <div class="azioni">
+      <a class="scarica" id="scarica2" href="https://github.com/Toskurim/ScEd-Binder/releases/latest">
+        <span id="scaricaTesto2">Scarica ScEd Binder per Windows</span>
+        <small id="scaricaNota2">ultima versione, dalla pagina delle release</small>
+      </a>
+    </div>
+    <p class="nota">Windows 10 e 11 a 64 bit. Gratuito e open source, licenza GPL.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="dentro">
+    <span>Strumento non ufficiale, fatto da appassionati. Star Citizen è un marchio di Cloud Imperium Games, Elite Dangerous di Frontier Developments: ScEd Binder non è affiliato a nessuno dei due.</span>
+    <span><a href="https://github.com/Toskurim/ScEd-Binder">Codice sorgente su GitHub</a> · <a href="https://github.com/Toskurim/ScEd-Binder/releases">Tutte le versioni</a> · <a href="https://github.com/Toskurim/ScEd-Binder/blob/main/NOTICE.md">Crediti e licenze</a></span>
+  </div>
+</footer>
+
+<script>
+// Il pulsante punta sempre all'ultima versione pubblicata: chiedo a GitHub qual è e collego direttamente il file.
+// Se la richiesta non riesce resta il collegamento alla pagina "latest", che è comunque sempre aggiornata.
+(async () => {
+  try {
+    const r = await fetch('https://api.github.com/repos/Toskurim/ScEd-Binder/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+    if (!r.ok) return;
+    const rel = await r.json();
+    const exe = (rel.assets || []).find(a => /\.exe$/i.test(a.name));
+    if (!exe || !/^https:\/\/github\.com\/Toskurim\/ScEd-Binder\//.test(exe.browser_download_url)) return;
+    const ver = String(rel.tag_name || '').replace(/^v/, '');
+    const mb = Math.round(exe.size / 1048576);
+    const quando = new Date(rel.published_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+    for (const s of ['', '2']) {
+      document.getElementById('scarica' + s).href = exe.browser_download_url;
+      document.getElementById('scaricaTesto' + s).textContent = 'Scarica ScEd Binder ' + ver + ' per Windows';
+      document.getElementById('scaricaNota' + s).textContent = 'file .exe, ' + mb + ' MB, pubblicata il ' + quando;
+    }
+  } catch (e) { /* resta il collegamento generico */ }
+})();
+
+// la prova dal vivo
+(() => {
+  const box = document.getElementById('tasti'), timers = {};
+  const accendi = k => {
+    const b = box.querySelector('[data-k="' + k + '"]'); if (!b) return;
+    b.classList.add('acceso'); clearTimeout(timers[k]);
+    timers[k] = setTimeout(() => b.classList.remove('acceso'), 650);
+  };
+  document.addEventListener('keydown', e => { if (!e.ctrlKey && !e.metaKey && !e.altKey && /^[1-6]$/.test(e.key) && !/^(INPUT|TEXTAREA)$/.test((e.target || {}).tagName || '')) accendi(e.key); });
+  box.addEventListener('pointerdown', e => { const b = e.target.closest('.tasto'); if (b) accendi(b.dataset.k); });
+  box.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { const b = e.target.closest('.tasto'); if (b) accendi(b.dataset.k); } });
+})();
+</script>
+</body>
+</html>

@@ -6,6 +6,8 @@ Assegna i comandi di **Star Citizen** e di **Elite Dangerous** a joystick, manet
 
 *Bind Star Citizen and Elite Dangerous controls to all your devices without launching the game. Italian UI and Italian command names (English names shown alongside).*
 
+**Pagina di presentazione e download dell'ultima versione: https://toskurim.github.io/ScEd-Binder/**
+
 ## Video dimostrativo
 
 ![Video dimostrativo di ScEd Binder](docs/ScEd_Binder_demo.gif)
