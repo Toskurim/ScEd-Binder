@@ -557,7 +557,9 @@ function showGameChange() {
 }
 
 // ---------- guida introduttiva ----------
-const NEWS = { ver: '4.5', items: [
+const NEWS = { ver: '4.6', items: [
+  'Anteprima 3D: la traslazione verticale ora va nello stesso verso del gioco (prima era al contrario, quindi chi invertiva l\'asse per volare bene vedeva la nave muoversi al rovescio).',
+  'Sotto la firma, in fondo alla colonna di sinistra, c\'è un collegamento diretto ai ringraziamenti.',
   'Nuova finestra «Informazioni e ringraziamenti» (menu ⋯, oppure la firma in fondo alla colonna di sinistra).',
   'Corretto l\'errore di avvio della 4.3 («Cannot read properties of null») che compariva quando il gioco aveva comandi nuovi ma nessuno rimosso, o viceversa.',
   'L\'elenco dei comandi di Star Citizen ora viene letto direttamente dal gioco installato: a ogni aggiornamento del gioco l\'app si allinea da sola e ti dice quali comandi sono nuovi o spariti.',
@@ -769,7 +771,7 @@ const MOVES = [
   { id: 'yaw', label: 'Imbardata (yaw)', hint: ['muso a sinistra', 'muso a destra'], axis: 'v_yaw', pos: 'v_yaw_right', neg: 'v_yaw_left', sign: 1 },
   { id: 'roll', label: 'Rollio (roll)', hint: ['inclina a sinistra', 'inclina a destra'], axis: 'v_roll', pos: 'v_roll_right', neg: 'v_roll_left', sign: 1 },
   { id: 'lat', label: 'Traslazione laterale', hint: ['sinistra', 'destra'], axis: 'v_strafe_lateral', pos: 'v_strafe_right', neg: 'v_strafe_left', sign: 1 },
-  { id: 'vert', label: 'Traslazione verticale', hint: ['giù', 'su'], axis: 'v_strafe_vertical', pos: 'v_strafe_up', neg: 'v_strafe_down', sign: -1 },
+  { id: 'vert', label: 'Traslazione verticale', hint: ['giù', 'su'], axis: 'v_strafe_vertical', pos: 'v_strafe_up', neg: 'v_strafe_down', sign: 1 }, // nel gioco, senza inversione, leva indietro = su (verificato in volo)
   { id: 'lon', label: 'Avanti / indietro', hint: ['indietro', 'avanti'], axis: 'v_strafe_longitudinal', pos: 'v_strafe_forward', neg: 'v_strafe_back', sign: -1 },
 ];
 const FM = 'spaceship_movement';
@@ -810,7 +812,7 @@ function renderShip() {
   }).join('');
   $('#view').innerHTML = `<div class="toolbar"><h2>Anteprima 3D — movimenti della nave</h2><small>Muovi le periferiche: la nave risponde ai comandi di volo che hai assegnato ai joystick.</small></div>
     <div class="shipwrap"><div class="shipcv"><canvas id="ship"></canvas></div><div class="shiplist">${rows}
-    <p class="hint">Se la nave si muove al contrario di come vuoi, spunta <b>inverti</b> sull'asse. L'anteprima usa la convenzione abituale (leva indietro = muso su, leva a destra = destra, leva avanti = avanti): l'ultima parola spetta comunque al gioco, fai una prova in volo. Tastiera e gamepad non sono mostrati qui.</p></div></div>`;
+    <p class="hint">Se la nave si muove al contrario di come vuoi, spunta <b>inverti</b> sull'asse. L'anteprima segue il comportamento del gioco (senza inversione: leva indietro = muso su e traslazione verso l'alto, leva a destra = destra, leva avanti = avanti): l'ultima parola spetta comunque al gioco, fai una prova in volo. Tastiera e gamepad non sono mostrati qui.</p></div></div>`;
   if (!S.shipLoop) { S.shipLoop = true; S.shipV = {}; requestAnimationFrame(shipFrame); }
 }
 const SHIP = (() => {
