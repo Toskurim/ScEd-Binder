@@ -1060,5 +1060,7 @@
 "ui_weaponselection_pitwheelcategory": "Weapon Selection - PIT Category",
 "ui_weaponsystems_pitwheelcategory": "Weapon Systems - PIT Category",
 "vehicle_interactor_quantumtravel_disable": "Disengage Quantum Travel",
-"vehicle_interactor_quantumtravel_enable": "Engage Quantum Travel"
+"vehicle_interactor_quantumtravel_enable": "Engage Quantum Travel",
+"ui_ciindustrialmode": "Cycle Industrial Operator Modes",
+"ui_ciindustrialmodedesc": "Next Industrial Mode"
 }

@@ -169,6 +169,7 @@ function updBanner() {
 function applyState(r) {
   S.gameOrder = r.gameOrder || []; S.advanced = r.advanced || {};
   S.devWarn = r.devWarn || ''; S.update = r.update || {}; S.gameInfo = r.game || {};
+  if (S.gameInfo.change) { S.gameInfo.change.added = S.gameInfo.change.added || []; S.gameInfo.change.removed = S.gameInfo.change.removed || []; } // un elenco vuoto può arrivare come null
   const sig = JSON.stringify([r.devices, r.installs, r.sync, r.gameOrder, r.advanced, S.devWarn, S.update.status, S.update.version, S.update.msg, S.gameInfo.status, S.gameInfo.version, (S.gameInfo.change || {}).to]);
   const changed = sig !== S.sig;
   if ($('#updpct')) $('#updpct').textContent = S.update.pct || 0;
@@ -535,7 +536,8 @@ function showGameChange() {
 }
 
 // ---------- guida introduttiva ----------
-const NEWS = { ver: '4.3', items: [
+const NEWS = { ver: '4.4', items: [
+  'Corretto l\'errore di avvio della 4.3 («Cannot read properties of null») che compariva quando il gioco aveva comandi nuovi ma nessuno rimosso, o viceversa.',
   'L\'elenco dei comandi di Star Citizen ora viene letto direttamente dal gioco installato: a ogni aggiornamento del gioco l\'app si allinea da sola e ti dice quali comandi sono nuovi o spariti.',
   'Questa guida: parte al primo avvio e dopo ogni aggiornamento, e la ritrovi nel menu ⋯ > Guida introduttiva.',
   'Stampa / PDF dello schema di ogni periferica con i comandi assegnati (dalla 4.2).',

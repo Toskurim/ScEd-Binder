@@ -1067,5 +1067,7 @@
 "ui_weaponselection_pitwheelcategory": "Selezione dell'arma - Categoria PIT",
 "ui_weaponsystems_pitwheelcategory": "Sistemi d'arma - Categoria PIT",
 "vehicle_interactor_quantumtravel_disable": "Disattiva viaggio Quantum",
-"vehicle_interactor_quantumtravel_enable": "Attiva viaggio Quantum"
+"vehicle_interactor_quantumtravel_enable": "Attiva viaggio Quantum",
+"ui_ciindustrialmode": "Cambia modalità operatore industriale",
+"ui_ciindustrialmodedesc": "Passa alla modalità industriale successiva"
 }

@@ -307,7 +307,7 @@ func syncGameData(install string) {
 	after := snapshotActions()
 	var ch *GameChange
 	if fresh {
-		c := GameChange{From: prevVer, To: ver, At: time.Now().Format("02/01/2006 15:04")}
+		c := GameChange{From: prevVer, To: ver, At: time.Now().Format("02/01/2006 15:04"), Added: []ChangeItem{}, Removed: []ChangeItem{}}
 		if c.From == "" {
 			c.From = "elenco integrato (4.10.2)"
 		}
@@ -344,6 +344,12 @@ func startGameData() {
 	if b, err := os.ReadFile(changePath()); err == nil {
 		var c GameChange
 		if json.Unmarshal(b, &c) == nil && c.To != "" {
+			if c.Added == nil {
+				c.Added = []ChangeItem{}
+			}
+			if c.Removed == nil {
+				c.Removed = []ChangeItem{}
+			}
 			gdMu.Lock()
 			gd.Change = &c
 			gdMu.Unlock()
