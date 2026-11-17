@@ -375,6 +375,7 @@ function renderDevice() {
           <button class="small" id="imgweb">Cerca sul web</button>
           ${img.startsWith('img:') ? `<button class="small ${S.placingMode ? 'primary' : ''}" id="placemode">${S.placingMode ? 'Fine posizionamento' : 'Posiziona etichette'}</button>` : ''}
           ${img ? '<button class="small" id="schexp" title="Salva immagine ed etichette in un file da condividere con altri">Esporta schema</button>' : ''}
+          <button class="small" id="prn" title="Stampa questo schema con i comandi assegnati, oppure salvalo in PDF (nella finestra di stampa scegli la stampante «Salva come PDF»)">🖨 Stampa / PDF</button>
           <button class="small" id="schimp" title="Carica uno schema ricevuto da altri">Importa schema…</button><input type="file" id="schfile" accept=".json" class="hidden">
         </div>
         ${!isED() ? `<p class="hint adv" title="Curve, sensibilità, zone morte e saturazione si regolano nel gioco. L'app le rilegge dal file del gioco a ogni scrittura e le tiene legate a questa periferica: se il suo numero js cambia, le riscrive sotto il numero nuovo.">⚙ Impostazioni avanzate del gioco legate a questa periferica: ${S.advanced[key] ? '<b>' + esc(S.advanced[key]) + '</b>' : 'nessuna (valori standard)'}</p>` : ''}
@@ -407,6 +408,29 @@ function phInputs(t) {
   if (toks.length < 2 || toks.length > 4) return null;
   const ins = toks.map(phInput);
   return ins.every(x => x && x !== '@name') ? ins : null;
+}
+// carattere più grande possibile perché il testo stia nella casella dello schema (larghezza W, altezza H in unità dello schema)
+let fitCtx = null;
+function fitFont(text, W, H) {
+  if (!W || !H) return 0;
+  fitCtx = fitCtx || document.createElement('canvas').getContext('2d');
+  const words = text.split(/\s+/).filter(Boolean);
+  for (let f = 9; f >= 5; f -= 0.5) {
+    fitCtx.font = `700 ${f}px Helvetica, Arial, sans-serif`;
+    const sp = fitCtx.measureText(' ').width; let lines = 1, cur = 0, ok = true;
+    for (const w of words) {
+      const ww = fitCtx.measureText(w).width;
+      if (ww > W - 3) { ok = false; break; }
+      if (cur && cur + sp + ww > W - 3) { lines++; cur = ww; } else cur += (cur ? sp : 0) + ww;
+    }
+    if (ok && lines * f * 1.2 <= H - 3) return f;
+  }
+  return 5;
+}
+function boxSize(el) { // casella disegnata attorno a un testo degli schemi (formato draw.io)
+  const fo = el.closest('foreignObject'), flex = fo && fo.firstElementChild, sw = el.closest('switch');
+  const g = sw && sw.parentElement && sw.parentElement.parentElement, prev = g && g.previousElementSibling, rc = prev && prev.querySelector('rect');
+  return [flex ? parseFloat(flex.style.width) || 0 : 0, rc ? +rc.getAttribute('height') || 0 : 0];
 }
 async function renderImage() {
   const key = S.view.key, di = devInfo(key), img = di.image || '', area = $('#imgarea'), hint = $('#imghint');
@@ -442,12 +466,14 @@ async function renderImage() {
       if (!isDiv) { el.textContent = ins.map(i => labelFor(i) || inputShort(i)).join(' | '); continue; }
       el.textContent = '';
       el.style.pointerEvents = 'all';
+      const [bw, bh] = boxSize(el);
+      const fit = fitFont(ins.map(i => labelFor(i) || inputShort(i)).join(' | '), bw, bh);
       const mk = (node, input) => {
         const lab = labelFor(input);
         node.textContent = lab ? lab : inputShort(input);
         node.setAttribute('title', inputLabel(input) + (lab ? ': ' + lab : ' (non assegnato)'));
         node.classList.add('ph'); node.dataset.live = input; node.dataset.input = input;
-        node.style.fontSize = lab ? (lab.length > 40 ? '5.5px' : '6.5px') : '9px';
+        node.style.fontSize = lab ? ((fit || (lab.length > 40 ? 5.5 : 6.5)) + 'px') : '9px';
         node.style.color = lab ? '#003a75' : '#666'; node.style.fontWeight = lab ? '700' : '600';
         node.style.pointerEvents = 'all';
       };
@@ -469,6 +495,75 @@ async function renderImage() {
   hint.innerHTML = S.placingMode
     ? (S.placing ? `Ora clicca sull'immagine nel punto in cui si trova <b>${esc(inputLabel(S.placing))}</b>.` : 'Premi un tasto sulla periferica (oppure 📍 nella lista a destra), poi clicca sull\'immagine dove si trova.')
     : 'Usa <b>Posiziona etichette</b> per indicare dove si trova ogni tasto. Clic su un\'etichetta per assegnare un comando; clic destro per toglierla.';
+}
+// ---------- stampa / PDF degli schemi con i comandi assegnati ----------
+const PRN_W = 1400, PRN_PW = 1062, PRN_PH = 733; // larghezza di lavoro; area utile di un A4 orizzontale (px a 96 dpi, margini 8 mm)
+function labelForKey(key, input) {
+  return isED() ? edInputBindings(key, input).map(x => edCmd(x.tag).en + (x.half ? (x.half === 'Pos' ? ' (+)' : ' (−)') : '')).join(' / ')
+    : S.profile.bindings.filter(b => b.dev === key && b.input === input).map(actLabel).join(' / ');
+}
+function allInputs(key) {
+  const inp = deviceInputs(key), out = [...inp.axes];
+  for (let h = 1; h <= inp.hats; h++) for (const d of ['up', 'down', 'left', 'right']) out.push('hat' + h + '_' + d);
+  for (let b = 1; b <= inp.nb; b++) out.push('button' + b);
+  return out;
+}
+function printableKeys() {
+  return Object.keys(S.profile.devices || {}).filter(k => allInputs(k).some(i => labelForKey(k, i)))
+    .sort((a, b) => (jsNum(a) || 99) - (jsNum(b) || 99));
+}
+async function printDevices(keys) {
+  if (S.printing || !keys.length) return;
+  S.printing = true;
+  const back = S.view, veil = document.createElement('div');
+  veil.id = 'prnveil'; veil.textContent = 'Preparo la stampa…'; document.body.appendChild(veil);
+  document.body.classList.add('prn-measure');
+  const root = document.createElement('div'); root.id = 'printroot';
+  const sub = `${isED() ? 'Elite Dangerous' : 'Star Citizen' + (S.profile.layout ? ' · layout «' + esc(S.profile.layout) + '»' : '')} · ${new Date().toLocaleDateString('it-IT')}`;
+  const page = (key, extra, body, port) => {
+    const n = jsNum(key), s = document.createElement('section'); s.className = 'pp' + (port ? ' port' : '');
+    s.innerHTML = `<div class="pph"><div><b>${n ? 'js' + n + ' · ' : ''}${esc(devName(key))}</b>${extra ? ' — ' + esc(extra) : ''}</div><span>${sub} · ScEd Binder v${esc(S.version)}</span></div>`;
+    s.appendChild(body); root.appendChild(s);
+  };
+  try {
+    for (const key of keys) {
+      S.view = { type: 'dev', key }; S.learn = null; S.placingMode = false; S.placing = null;
+      render(); await renderImage();
+      const area = $('#imgarea');
+      await Promise.all([...area.querySelectorAll('img')].map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; })));
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      drawPhotoLines();
+      const units = [...area.querySelectorAll('.pv, .imgbox')];
+      for (const u of units) {
+        const r = u.getBoundingClientRect(); if (!r.width || !r.height) continue;
+        const c = u.cloneNode(true);
+        for (const e of [c, ...c.querySelectorAll('*')]) { e.classList.remove('live', 'learn', 'placing'); e.removeAttribute('title'); e.removeAttribute('id'); }
+        c.style.width = r.width + 'px';
+        const w = document.createElement('div'); w.className = 'ppc';
+        const port = r.height > r.width * 1.05; // schema alto e stretto: pagina in verticale
+        const pw = port ? PRN_PH : PRN_PW, ph = port ? PRN_PW : PRN_PH;
+        w.style.zoom = Math.min(pw / r.width, (ph - 40) / r.height).toFixed(4);
+        w.appendChild(c);
+        const cap = u.classList.contains('pv') ? ($('.pvc', u) || {}).textContent || '' : '';
+        page(key, cap.split(' — ').slice(1).join(' — '), w, port);
+      }
+      // senza immagine (o con un'immagine senza etichette): elenco dei comandi assegnati
+      const rows = allInputs(key).map(i => [i, labelForKey(key, i)]).filter(x => x[1]);
+      if (!units.length && rows.length) {
+        const t = document.createElement('div'); t.className = 'ppt';
+        t.innerHTML = rows.map(([i, l]) => `<div><b>${esc(inputLabel(i))}</b> ${esc(l)}</div>`).join('');
+        page(key, 'elenco dei comandi', t);
+      }
+    }
+  } finally {
+    document.body.classList.remove('prn-measure'); veil.remove();
+    S.view = back; S.printing = false; render();
+  }
+  if (!root.children.length) { toast('Niente da stampare: queste periferiche non hanno né uno schema né comandi assegnati.', true); return; }
+  document.body.appendChild(root);
+  const done = () => { root.remove(); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  window.print();
 }
 // ---------- modelli con foto ----------
 const VALID_IN = /^(button\d+|hat\d_(up|down|left|right)|x|y|z|rot[xyz]|slider[12])$/;
@@ -1044,6 +1139,7 @@ $('#menu').addEventListener('click', async e => {
     if (a === 'savefile') doSaveFile();
     if (a === 'opengame') { if (inst) await api('/api/open', { what: 'game', path: inst.path }); }
     if (a === 'opendata') await api('/api/open', { what: 'dati' });
+    if (a === 'printall') { const ks = printableKeys(); if (!ks.length) toast('Nessuna periferica ha ancora comandi assegnati.', true); else await printDevices(ks); }
     if (a === 'log') { const r = await api('/api/log'); openModal(`<h2>Diagnostica periferiche</h2><div class="en">Se una periferica non viene letta bene, copia questo testo e mandalo a chi ti ha fatto l'app.</div><pre>${esc(r.join('\n'))}\n\n${esc(JSON.stringify(S.devices, null, 1))}</pre><div class="btns"><button data-close="1">Chiudi</button></div>`); }
     if (a === 'about') openModal(`<h2>ScEd Binder v${esc(S.version)}</h2><div>Star Citizen + Elite Dangerous · github.com/Toskurim/ScEd-Binder</div><div>Comandi del gioco: ${esc(S.gameData)}</div><div>Cartella dati: ${esc(S.dataDir)}</div><div class="en">Schemi delle periferiche: progetto open source Joystick Diagrams (github.com/Rexeh/joystick-diagrams, licenza GPL-2.0). Traduzione di base dei comandi: comunità italiana di Star Citizen (progetto StarCitizen-Localization), riveduta. Regole di numerazione dei joystick: osservazioni del progetto BindSight. Star Citizen è un marchio di Cloud Imperium Games, Elite Dangerous di Frontier Developments; questa app non è affiliata a nessuno dei due.</div><div class="btns"><button data-close="1">Chiudi</button></div>`);
     if (a === 'options') {
@@ -1132,6 +1228,7 @@ $('#view').addEventListener('click', e => {
   if (t.id === 'imgup') { $('#imgfile').click(); return; }
   if (t.id === 'imgweb') { window.open('https://www.bing.com/images/search?q=' + encodeURIComponent(devName(key) + ' button layout diagram'), '_blank'); return; }
   if (t.id === 'schimp') { $('#schfile').click(); return; }
+  if (t.id === 'prn') { printDevices([S.view.key]).catch(err => toast(err.message, true)); return; }
   if (t.id === 'schexp') {
     S.saving.then(async () => {
       try {

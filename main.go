@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const appVersion = "4.1"
+const appVersion = "4.2"
 const listenAddr = "127.0.0.1:47811"
 
 //go:embed web
