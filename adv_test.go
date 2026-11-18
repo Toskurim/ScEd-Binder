@@ -63,3 +63,19 @@ func TestAdvancedFollowDevice(t *testing.T) {
 		t.Errorf("riassunto: %q", s)
 	}
 }
+
+func TestAdvancedDetail(t *testing.T) {
+	p := &Profile{Devices: map[string]*DevInfo{"{40CB3344-0000-0000-0000-504944564944}#1": {GUID: "{40CB3344-0000-0000-0000-504944564944}", Options: `<flight_move_pitch exponent="1.5"/><flight_move_yaw><nonlinearity_curve><point in="0.1" out="0.05"/><point in="0.5" out="0.3"/><point in="1" out="1"/></nonlinearity_curve></flight_move_yaw>`}, "{00CB3344-0000-0000-0000-504944564944}#1": {GUID: "{00CB3344-0000-0000-0000-504944564944}"}},
+		Extras: []string{`<deviceoptions name="Stick  {40CB3344-0000-0000-0000-504944564944}"><option input="x" saturation="0.74250001"/><option input="x" saturation="0.74250001"/><option input="z" saturation="0.9"/><option input="z" deadzone="0.19799998"/></deviceoptions>`}}
+	d := p.advancedDetail()
+	a := d["{40CB3344-0000-0000-0000-504944564944}#1"]
+	if a.Axes["x"].Saturation != "0.74250001" || a.Axes["z"].Deadzone != "0.19799998" || a.Axes["z"].Saturation != "0.9" {
+		t.Errorf("assi: %+v", a.Axes)
+	}
+	if a.Groups["flight_move_pitch"].Exponent != "1.5" || a.Groups["flight_move_yaw"].Points != 3 {
+		t.Errorf("gruppi: %+v", a.Groups)
+	}
+	if _, ok := d["{00CB3344-0000-0000-0000-504944564944}#1"]; ok {
+		t.Error("periferica senza impostazioni presente")
+	}
+}

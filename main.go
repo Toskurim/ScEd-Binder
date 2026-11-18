@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-const appVersion = "4.6"
+const appVersion = "4.7"
 const listenAddr = "127.0.0.1:47811"
 
 //go:embed web
@@ -271,7 +271,7 @@ func currentState() map[string]any {
 	for _, d := range connected {
 		out = append(out, devOut{d, num[d.Key]})
 	}
-	return map[string]any{"devices": out, "installs": installs, "profRev": profRev, "sync": sync, "gameOrder": gameOrder, "version": appVersion, "advanced": profile.advancedSummary(), "devWarn": hub.warning(), "update": getUpd(), "selInstall": selPath}
+	return map[string]any{"devices": out, "installs": installs, "profRev": profRev, "sync": sync, "gameOrder": gameOrder, "version": appVersion, "advanced": profile.advancedSummary(), "advDetail": profile.advancedDetail(), "devWarn": hub.warning(), "update": getUpd(), "selInstall": selPath}
 }
 
 func selectedInstall(installs []Install) *Install {

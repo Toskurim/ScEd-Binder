@@ -167,10 +167,10 @@ function updBanner() {
   return '';
 }
 function applyState(r) {
-  S.gameOrder = r.gameOrder || []; S.advanced = r.advanced || {};
+  S.gameOrder = r.gameOrder || []; S.advanced = r.advanced || {}; S.advDetail = r.advDetail || {};
   S.devWarn = r.devWarn || ''; S.update = r.update || {}; S.gameInfo = r.game || {};
   if (S.gameInfo.change) { S.gameInfo.change.added = S.gameInfo.change.added || []; S.gameInfo.change.removed = S.gameInfo.change.removed || []; } // un elenco vuoto può arrivare come null
-  const sig = JSON.stringify([r.devices, r.installs, r.sync, r.gameOrder, r.advanced, S.devWarn, S.update.status, S.update.version, S.update.msg, S.gameInfo.status, S.gameInfo.version, (S.gameInfo.change || {}).to]);
+  const sig = JSON.stringify([r.devices, r.installs, r.sync, r.gameOrder, r.advanced, r.advDetail, S.devWarn, S.update.status, S.update.version, S.update.msg, S.gameInfo.status, S.gameInfo.version, (S.gameInfo.change || {}).to]);
   const changed = sig !== S.sig;
   if ($('#updpct')) $('#updpct').textContent = S.update.pct || 0;
   S.sig = sig; S.devices = r.devices || []; S.installs = r.installs || []; S.sync = r.sync || '';
@@ -360,13 +360,31 @@ function deviceInputs(key) {
 function renderDevice() {
   const key = S.view.key, di = devInfo(key), d = liveDev(key), n = jsNum(key);
   const inp = deviceInputs(key);
+  const adv = S.advDetail[key] || { axes: {}, groups: {} };
+  const num = v => { const f = parseFloat(v); return isFinite(f) ? String(Math.round(f * 100) / 100).replace('.', ',') : v; };
+  const ADVT = 'Si regola nel gioco (Opzioni > Controlli). L\'app lo legge dal file del gioco, lo conserva e lo tiene legato a questa periferica anche se il suo numero js cambia.';
+  // zona morta e saturazione dell'asse fisico
+  const axisAdv = input => {
+    if (isED() || !AXN[input]) return '';
+    const a = adv.axes[input] || {}, p = [];
+    if (a.deadzone) p.push('zona morta ' + num(a.deadzone));
+    if (a.saturation) p.push('saturazione ' + num(a.saturation));
+    return `<div class="advx ${p.length ? 'on' : ''}" title="${esc(ADVT)}">${p.length ? p.join(' · ') : 'valori standard'}</div>`;
+  };
+  // curva o esponente del movimento assegnato a questo asse
+  const curveAdv = b => {
+    const a = actOf(b); if (!a || !a.optGroup || !AXN[b.input]) return '';
+    const g = adv.groups[a.optGroup]; if (!g) return '';
+    const t = g.points ? `curva personalizzata (${g.points} punti)` : g.exponent ? 'curva: esponente ' + num(g.exponent) : '';
+    return t ? `<span class="advc" title="${esc(ADVT)}">${t}</span>` : '';
+  };
   const rowFor = (input, extra) => {
     const bs = S.profile.bindings.filter(b => b.dev === key && b.input === input);
     const ign = isIgnored(key, input);
     const invBox = b => { const a = actOf(b); return a && a.canInvert && AXN[input] ? `<label class="inv" title="Inverte questo movimento per questa periferica (viene scritto nel gioco)"><input type="checkbox" data-inv="${esc(a.optGroup)}" ${invertState(key, a.optGroup) ? 'checked' : ''}> inverti</label>` : ''; };
     return `<div class="row ${S.placing === input ? 'placing' : ''} ${ign ? 'ign' : ''}" data-live="${input}" data-input="${input}">
-      <span class="led"></span><div><b>${esc(inputLabel(input))}</b>${extra || ''}</div>
-      <div>${isED() ? edChips(key, input) : bs.map((b, i) => `<span class="chip" title="${esc((actOf(b) || {}).labelEn || '')}">${esc(actLabel(b))}${b.multiTap === '2' ? ' ×2' : ''} <small>${esc(mapLabel(b.map))}</small> <span class="x" data-rm="${i}" title="Rimuovi">×</span></span>${invBox(b)}`).join('')}${ign ? '<span class="def">ignorato: l\'app non lo rileva</span>' : ''}</div>
+      <span class="led"></span><div><b>${esc(inputLabel(input))}</b>${extra || ''}${axisAdv(input)}</div>
+      <div>${isED() ? edChips(key, input) : bs.map((b, i) => `<span class="chip" title="${esc((actOf(b) || {}).labelEn || '')}">${esc(actLabel(b))}${b.multiTap === '2' ? ' ×2' : ''} <small>${esc(mapLabel(b.map))}</small> <span class="x" data-rm="${i}" title="Rimuovi">×</span></span>${curveAdv(b)}${invBox(b)}`).join('')}${ign ? '<span class="def">ignorato: l\'app non lo rileva</span>' : ''}</div>
       <div><button class="small" data-add="1" title="Assegna un comando a questo ingresso">+ comando</button> <button class="small" data-ign="1" title="${ign ? 'Torna a rilevare questo ingresso' : 'Ignora questo ingresso: non viene più rilevato né evidenziato (utile per interruttori sempre accesi o assi che tremano)'}">${ign ? 'riattiva' : 'ignora'}</button>${(di.image || '').startsWith('img:') ? ` <button class="small" data-place="1" title="Posiziona l'etichetta sull'immagine">📍</button>` : ''}</div></div>`;
   };
   let list = '';
@@ -557,7 +575,8 @@ function showGameChange() {
 }
 
 // ---------- guida introduttiva ----------
-const NEWS = { ver: '4.6', items: [
+const NEWS = { ver: '4.7', items: [
+  'Nella pagina di una periferica ogni asse ora mostra zona morta e saturazione impostate nel gioco (o «standard»), e accanto al comando la curva o l\'esponente del movimento.',
   'Anteprima 3D: la traslazione verticale ora va nello stesso verso del gioco (prima era al contrario, quindi chi invertiva l\'asse per volare bene vedeva la nave muoversi al rovescio).',
   'Sotto la firma, in fondo alla colonna di sinistra, c\'è un collegamento diretto ai ringraziamenti.',
   'Nuova finestra «Informazioni e ringraziamenti» (menu ⋯, oppure la firma in fondo alla colonna di sinistra).',

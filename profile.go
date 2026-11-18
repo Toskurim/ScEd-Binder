@@ -961,3 +961,92 @@ func (p *Profile) advancedSummary() map[string]string {
 	}
 	return res
 }
+
+// AdvDetail: impostazioni avanzate del gioco per una periferica, in forma leggibile dall'interfaccia.
+// Zone morte e saturazione sono per asse fisico (<deviceoptions>); curve ed esponenti sono per movimento
+// (gruppo di opzioni, es. flight_move_pitch) dentro <options> del joystick.
+type AdvAxis struct {
+	Deadzone   string `json:"deadzone,omitempty"`
+	Saturation string `json:"saturation,omitempty"`
+}
+type AdvGroup struct {
+	Exponent string `json:"exponent,omitempty"`
+	Points   int    `json:"points,omitempty"` // punti di una curva personalizzata
+}
+type AdvDetail struct {
+	Axes   map[string]AdvAxis  `json:"axes"`
+	Groups map[string]AdvGroup `json:"groups"`
+}
+
+func (p *Profile) advancedDetail() map[string]AdvDetail {
+	res := map[string]AdvDetail{}
+	for key, di := range p.Devices {
+		d := AdvDetail{Axes: map[string]AdvAxis{}, Groups: map[string]AdvGroup{}}
+		for _, e := range p.Extras {
+			m := devOptNameRe.FindStringSubmatch(e)
+			if m == nil || di.GUID == "" || productGUID(m[1]) != di.GUID {
+				continue
+			}
+			var x struct {
+				Options []struct {
+					Input      string `xml:"input,attr"`
+					Deadzone   string `xml:"deadzone,attr"`
+					Saturation string `xml:"saturation,attr"`
+				} `xml:"option"`
+			}
+			if xml.Unmarshal([]byte(e), &x) != nil {
+				continue
+			}
+			for _, o := range x.Options {
+				a := d.Axes[o.Input]
+				if o.Deadzone != "" {
+					a.Deadzone = o.Deadzone
+				}
+				if o.Saturation != "" {
+					a.Saturation = o.Saturation
+				}
+				d.Axes[o.Input] = a
+			}
+		}
+		if strings.TrimSpace(di.Options) != "" {
+			dec := xml.NewDecoder(strings.NewReader("<o>" + di.Options + "</o>"))
+			stack := []string{}
+			for {
+				tok, err := dec.Token()
+				if err != nil {
+					break
+				}
+				switch t := tok.(type) {
+				case xml.StartElement:
+					n := t.Name.Local
+					switch n {
+					case "point":
+						if len(stack) >= 2 && stack[len(stack)-1] == "nonlinearity_curve" {
+							g := d.Groups[stack[len(stack)-2]]
+							g.Points++
+							d.Groups[stack[len(stack)-2]] = g
+						}
+					case "nonlinearity_curve", "o":
+					default:
+						for _, a := range t.Attr {
+							if a.Name.Local == "exponent" && a.Value != "" {
+								g := d.Groups[n]
+								g.Exponent = a.Value
+								d.Groups[n] = g
+							}
+						}
+					}
+					stack = append(stack, n)
+				case xml.EndElement:
+					if len(stack) > 0 {
+						stack = stack[:len(stack)-1]
+					}
+				}
+			}
+		}
+		if len(d.Axes)+len(d.Groups) > 0 {
+			res[key] = d
+		}
+	}
+	return res
+}
