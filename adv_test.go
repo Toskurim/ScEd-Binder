@@ -79,3 +79,50 @@ func TestAdvancedDetail(t *testing.T) {
 		t.Error("periferica senza impostazioni presente")
 	}
 }
+
+func TestAdvEdit(t *testing.T) {
+	sp := func(s string) *string { return &s }
+	g := "{40CB3344-0000-0000-0000-504944564944}"
+	p := &Profile{Devices: map[string]*DevInfo{g + "#1": {GUID: g, Product: "Stick  " + g, Options: `<flight_move_pitch exponent="1.5"/><flight_move_yaw><nonlinearity_curve><point in="0.5" out="0.3"/></nonlinearity_curve></flight_move_yaw><flight_move_roll invert="1"/>`,
+		Adv: &AdvEdit{Axes: map[string]AdvAxisEdit{"x": {Deadzone: sp("0.05")}, "z": {Saturation: sp("")}}, Exp: map[string]*string{"flight_move_pitch": sp("2"), "flight_move_yaw": sp("3"), "flight_move_strafe_vertical": sp("1.3"), "flight_move_roll": sp("1")}}}},
+		Extras: []string{`<deviceoptions name="Stick  ` + g + `"><option input="x" saturation="0.74250001"/><option input="x" saturation="0.74250001"/><option input="z" saturation="0.9"/><option input="z" deadzone="0.2"/></deviceoptions>`, `<altro/>`}}
+	di := p.Devices[g+"#1"]
+	o := effOptions(di)
+	for _, w := range []string{`<flight_move_pitch exponent="2"/>`, `<nonlinearity_curve>`, `<flight_move_strafe_vertical exponent="1.3"/>`, `<flight_move_roll invert="1"/>`} {
+		if !strings.Contains(o, w) {
+			t.Errorf("opzioni: manca %s in %s", w, o)
+		}
+	}
+	if strings.Contains(o, `exponent="3"`) {
+		t.Error("la curva personalizzata è stata toccata")
+	}
+	ex := p.effExtras(nil)
+	if len(ex) != 2 || ex[1] != `<altro/>` {
+		t.Fatalf("extras: %v", ex)
+	}
+	if strings.Count(ex[0], `input="x" saturation="0.74250001"`) != 1 || !strings.Contains(ex[0], `<option input="x" deadzone="0.05"/>`) || strings.Contains(ex[0], `input="z" saturation`) || !strings.Contains(ex[0], `<option input="z" deadzone="0.2"/>`) {
+		t.Errorf("deviceoptions: %s", ex[0])
+	}
+	d := p.advancedDetail()[g+"#1"]
+	if d.Axes["x"].Deadzone != "0.05" || d.Axes["z"].Saturation != "" || d.Groups["flight_move_pitch"].Exponent != "2" {
+		t.Errorf("dettaglio effettivo: %+v", d)
+	}
+	// il file del gioco ora contiene i valori scelti: le modifiche in sospeso spariscono
+	p.Extras = []string{ex[0], `<altro/>`}
+	di.Options = o
+	if !p.dropWrittenAdv() || di.Adv != nil {
+		t.Errorf("modifiche non tolte dopo la scrittura: %+v", di.Adv)
+	}
+	if p.hasAdvPending() {
+		t.Error("risulta ancora da scrivere")
+	}
+	// periferica senza blocco: viene creato; valori standard: nessun blocco
+	p2 := &Profile{Devices: map[string]*DevInfo{g + "#1": {GUID: g, Adv: &AdvEdit{Axes: map[string]AdvAxisEdit{"y": {Saturation: sp("0.8")}}}}}}
+	if e := p2.effExtras(map[string]string{g + "#1": "Nuovo  " + g}); len(e) != 1 || !strings.Contains(e[0], `<deviceoptions name="Nuovo  `+g+`">`) || !strings.Contains(e[0], `<option input="y" saturation="0.8"/>`) {
+		t.Errorf("blocco nuovo: %v", e)
+	}
+	p2.Devices[g+"#1"].Adv.Axes["y"] = AdvAxisEdit{Saturation: sp("1")}
+	if e := p2.effExtras(map[string]string{g + "#1": "Nuovo  " + g}); len(e) != 0 {
+		t.Errorf("valori standard ma blocco scritto: %v", e)
+	}
+}

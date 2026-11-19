@@ -108,11 +108,13 @@ function stashLayout() { // copia le assegnazioni correnti dentro il layout atti
   layoutNames();
   const p = S.profile, l = p.layouts.find(x => x.name === p.layout);
   l.bindings = JSON.parse(JSON.stringify(p.bindings)); l.invert = {};
+  if (p.ed && p.ed.bindings) l.ed = JSON.parse(JSON.stringify(p.ed.bindings));
   for (const k in p.devices) l.invert[k] = Object.assign({}, p.devices[k].invert || {});
 }
 function applyLayout(name) { // carica un layout come assegnazioni correnti
   const p = S.profile, l = p.layouts.find(x => x.name === name); if (!l) return;
   p.layout = name; p.bindings = JSON.parse(JSON.stringify(l.bindings || []));
+  if (l.ed) edState().bindings = JSON.parse(JSON.stringify(l.ed)); // i layout creati prima della 5.0 non hanno la parte di Elite: resta quella attuale
   for (const k in p.devices) p.devices[k].invert = Object.assign({}, (l.invert || {})[k] || {});
   S.learn = null; saveProfile().then(pollState); render();
 }
@@ -124,9 +126,11 @@ function askLayoutName(msg, def) {
 }
 function layoutAction(a) {
   const p = S.profile; layoutNames();
-  if (a === 'new') { const n = askLayoutName('Nome del nuovo layout (parte vuoto):'); if (!n) return; stashLayout(); p.layouts.push({ name: n, bindings: [], invert: {} }); applyLayout(n); }
-  if (a === 'dup') { const n = askLayoutName('Nome della copia di "' + p.layout + '":', p.layout + ' 2'); if (!n) return; stashLayout(); const cur = p.layouts.find(x => x.name === p.layout); p.layouts.push({ name: n, bindings: JSON.parse(JSON.stringify(cur.bindings)), invert: JSON.parse(JSON.stringify(cur.invert)) }); applyLayout(n); }
+  if (a === 'new') { const n = askLayoutName('Nome del nuovo layout (parte vuoto):'); if (!n) return; stashLayout(); p.layouts.push({ name: n, bindings: [], invert: {}, ed: {} }); applyLayout(n); }
+  if (a === 'dup') { const n = askLayoutName('Nome della copia di "' + p.layout + '":', p.layout + ' 2'); if (!n) return; stashLayout(); const cur = p.layouts.find(x => x.name === p.layout); p.layouts.push(Object.assign(JSON.parse(JSON.stringify(cur)), { name: n })); applyLayout(n); }
   if (a === 'ren') { const n = askLayoutName('Nuovo nome per "' + p.layout + '":', p.layout); if (!n) return; p.layouts.find(x => x.name === p.layout).name = n; p.layout = n; saveProfile(); render(); }
+  if (a === 'exp') exportLayout();
+  if (a === 'imp') $('#lyfile').click();
   if (a === 'del') {
     if (p.layouts.length < 2) return toast('È l\'unico layout: non si può eliminare', true);
     if (!confirm('Elimino il layout "' + p.layout + '" con tutte le sue assegnazioni?\n(Il file già scritto nel gioco non viene toccato.)')) return;
@@ -134,11 +138,38 @@ function layoutAction(a) {
   }
 }
 
+// esporta / importa un layout su file (per una copia di sicurezza o per passarlo a un altro PC con le stesse periferiche)
+function exportLayout() {
+  stashLayout();
+  const p = S.profile, l = p.layouts.find(x => x.name === p.layout), devs = {};
+  const used = new Set((l.bindings || []).map(b => b.dev));
+  for (const k in p.devices) if (used.has(k) || edCountFor(k)) devs[k] = devName(k);
+  const out = { formato: 'sced-layout', v: 1, app: S.version, nome: l.name, periferiche: devs, bindings: l.bindings, invert: l.invert, ed: l.ed || {} };
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' }));
+  a.download = 'layout_' + l.name.replace(/[^A-Za-z0-9]+/g, '_') + '.json'; a.click();
+  toast('Layout "' + l.name + '" salvato nel file ' + a.download + ' (cartella Download).');
+}
+async function importLayoutFile(file) {
+  let d;
+  try { d = JSON.parse(await file.text()); } catch (e) { return toast('Il file non è leggibile: non è un layout di ScEd Binder.', true); }
+  if (!d || d.formato !== 'sced-layout' || !Array.isArray(d.bindings)) return toast('Questo file non è un layout esportato da ScEd Binder.', true);
+  const bs = d.bindings.filter(b => b && typeof b.map === 'string' && typeof b.action === 'string' && typeof b.dev === 'string' && typeof b.input === 'string');
+  let name = String(d.nome || 'Importato').slice(0, 40); layoutNames();
+  for (let i = 2; layoutNames().includes(name); i++) name = String(d.nome || 'Importato').slice(0, 36) + ' ' + i;
+  const p = S.profile, miss = [...new Set(bs.map(b => b.dev))].filter(k => isJsDev(k) && !p.devices[k]).map(k => (d.periferiche || {})[k] || 'periferica sconosciuta');
+  stashLayout();
+  p.layouts.push({ name, bindings: bs, invert: d.invert && typeof d.invert === 'object' ? d.invert : {}, ed: d.ed && typeof d.ed === 'object' ? d.ed : {} });
+  applyLayout(name);
+  if (miss.length) setTimeout(() => alert('Layout "' + name + '" importato.\n\nAttenzione: usa periferiche che su questo PC non risultano mai collegate:\n• ' + [...new Set(miss)].join('\n• ') + '\n\nI loro comandi restano nel layout ma non verranno scritti nel gioco finché non colleghi quelle periferiche.'), 50);
+  else toast('Layout "' + name + '" importato (' + bs.length + ' assegnazioni). Per usarlo nel gioco premi "Scrivi nel gioco".');
+}
+
 // ---------- avvio e aggiornamento ----------
 async function boot() {
   const r = await api('/api/boot');
   if (staleCheck(r.version)) return;
   try { if (r.version === JSVER) sessionStorage.removeItem('scedReload'); } catch (e) { }
+  S.guide = r.guide || null;
   S.maps = r.maps || []; S.templates = r.templates || []; S.profile = r.profile; S.profRev = r.profRev;
   S.invertDefaults = r.invertDefaults || {}; S.photoDevices = (r.photoDevices || []).slice().sort((a, b) => (a.brand + a.name).localeCompare(b.brand + b.name)); S.photoById = {}; for (const p of S.photoDevices) S.photoById[p.id] = p; S.gameData = r.gameData; S.version = r.version; S.dataDir = r.dataDir;
   for (const m of S.maps) for (const a of (m.actions || [])) S.actions.set(actKey(a.map, a.name), a);
@@ -251,7 +282,6 @@ function render() {
   renderHeader(); renderSidebar();
   if (S.view.type === 'dev' && !S.profile.devices[S.view.key]) S.view = { type: 'all' };
   document.body.classList.toggle('game-ed', isED());
-  if (isED() && S.view.type === 'ship') S.view = { type: 'all' };
   if (S.view.type === 'dev') renderDevice(); else if (S.view.type === 'ship') renderShip(); else if (isED()) renderAllED(); else renderAll();
 }
 function renderHeader() {
@@ -312,36 +342,129 @@ function chipJS(b) {
   const extra = (a && a.canInvert && AXN[b.input] && invertState(b.dev, a.optGroup) ? ' ⇅invertito' : '') + (b.multiTap === '2' ? ' ×2' : '') + (b.mode ? ' [' + esc(b.mode) + ']' : '');
   return `<span class="chip ${n ? '' : 'off'}" title="${esc(devName(b.dev))}">${n ? 'js' + n : 'scollegata'} · ${esc(inputLabel(b.input))}${extra} <small>${esc(devName(b.dev).slice(0, 22))}</small></span>`;
 }
+// ---------- guida ai comandi: essenziali, prerequisiti, verifica ----------
+function guide() { return S.guide || { gruppi: [], prerequisiti: [], insiemi: [] }; }
+function hasJs(k) { const [m, n] = k.split('/'); return bindingsOf(m, n).some(b => isJsDev(b.dev)); }
+function actByKey(k) { return S.actions.get(k); }
+// regola di prerequisito che riguarda un comando ("mappa/*" oppure nome esatto)
+function prereqFor(k) { const m = k.split('/')[0]; return (guide().prerequisiti || []).find(p => (p.se || []).some(x => x === k || x === m + '/*') && !(p.serve || []).includes(k)); }
+function prereqState(p) { // 'js' = attivabile da joystick, 'kb' = solo da tastiera/mouse, '' = nessun modo
+  if ((p.serve || []).some(hasJs)) return 'js';
+  for (const k of p.serve || []) { const a = actByKey(k); if (!a) continue; const [m, n] = k.split('/'); if (a.defKb || a.defMo || bindingsOf(m, n).some(b => b.dev === 'kb' || b.dev === 'mo')) return 'kb'; }
+  return '';
+}
+function prereqKeys(p) { return (p.serve || []).map(k => actByKey(k)).filter(a => a && (a.defKb || a.defMo)).map(a => `${a.label}: ${fmtKeys(a.defKb || a.defMo)}`); }
+// varianti dello stesso comando: stesso nome tolte le parole "attiva/disattiva", "tieni premuto" ecc.
+const VARW = /_(toggle|on|off|set|enable|disable|deploy|retract|short|long|hold|open|close|lock|unlock|tap)(?=_|$)/g;
+function famKey(a) { return a.map + '/' + a.name.replace(VARW, ''); }
+function variantsOf(a) { const f = famKey(a); return [...S.actions.values()].filter(x => x.visible && x !== a && famKey(x) === f); }
+// tasto della tastiera -> forma usata dal gioco, per la ricerca "per tasto"
+function keyTokens(q) { return q.toLowerCase().replace(/\s+/g, '').split('+').filter(Boolean).map(t => ({ maiusc: 'shift', ctrl: 'ctrl', control: 'ctrl', spazio: 'space', invio: 'enter', canc: 'delete', esc: 'escape' }[t] || t)); }
+function keyMatch(a, q) {
+  const want = keyTokens(q); if (!want.length) return true;
+  for (const d of [a.defKb, a.defMo]) {
+    if (!d) continue;
+    const have = d.toLowerCase().split('+').map(t => t.trim());
+    if (want.length === have.length && want.every(w => have.some(h => h === w || h === 'l' + w || h === 'r' + w))) return true;
+  }
+  return false;
+}
+function checkLayout() {
+  const out = [], G = guide(), bs = S.profile.bindings.filter(b => isJsDev(b.dev));
+  for (const p of G.prerequisiti || []) {
+    const used = bs.filter(b => { const k = actKey(b.map, b.action); return (p.se || []).some(x => x === k || x === b.map + '/*') && !(p.serve || []).includes(k); });
+    if (!used.length) continue;
+    const st = prereqState(p);
+    if (st === 'js') continue;
+    const names = [...new Set(used.map(actLabel))].slice(0, 4).join(', ') + (used.length > 4 ? '…' : '');
+    out.push({ lvl: st ? 'info' : 'warn', t: `${p.testo} Hai assegnato a un joystick: ${names}, ma nessun comando per attivare la ${p.nome}.` + (st ? ` Per ora puoi farlo solo da tastiera o mouse (${prereqKeys(p).slice(0, 2).join('; ')}).` : ''), fix: (p.serve || [])[0], fixLabel: 'Assegna la ' + p.nome });
+  }
+  for (const i of G.insiemi || []) {
+    const got = (i.voci || []).map(v => v.some(hasJs)), n = got.filter(Boolean).length;
+    if (n && n < got.length) out.push({ lvl: 'warn', t: `${i.testo} Manca: ${(i.nomi || []).filter((x, k) => !got[k]).join(', ')}.`, fix: (i.voci[got.indexOf(false)] || [])[0], fixLabel: 'Assegna' });
+  }
+  const seen = {};
+  for (const b of bs) { const k = b.dev + '|' + b.input + '|' + (b.multiTap || ''); (seen[k] = seen[k] || []).push(b); }
+  for (const k in seen) {
+    const l = seen[k]; if (l.length < 2) continue;
+    const sameMap = l.filter(b => l.some(o => o !== b && o.map === b.map));
+    if (sameMap.length > 1) out.push({ lvl: 'info', t: `${jsNum(l[0].dev) ? 'js' + jsNum(l[0].dev) : devName(l[0].dev)} · ${inputLabel(l[0].input)} ha più comandi della stessa categoria: ${sameMap.map(actLabel).join(' + ')}. Partono insieme: controlla che sia voluto.` });
+  }
+  const gone = bs.filter(b => !S.actions.has(actKey(b.map, b.action)));
+  if (gone.length) out.push({ lvl: 'warn', t: `${gone.length} assegnazioni puntano a comandi che il gioco non ha più: ${[...new Set(gone.map(b => b.action))].join(', ')}.` });
+  for (const b of bs) if (isIgnored(b.dev, b.input)) out.push({ lvl: 'warn', t: `${devName(b.dev)} · ${inputLabel(b.input)} è segnato «ignora» ma ha un comando assegnato (${actLabel(b)}): l'app non lo evidenzia più, nel gioco funziona comunque.` });
+  const miss = (G.gruppi || []).flatMap(g => g.comandi).filter(k => actByKey(k) && !hasJs(k));
+  return { out, miss };
+}
+function showCheck() {
+  const { out, miss } = checkLayout();
+  const ess = (guide().gruppi || []).flatMap(g => g.comandi).filter(actByKey).length;
+  openModal(`<h2>Verifica del layout</h2>
+    ${out.length ? out.map(o => `<div class="${o.lvl === 'warn' ? 'bad' : 'info'} chk">${esc(o.t)}${o.fix && actByKey(o.fix) ? ` <button class="small" data-chkfix="${esc(o.fix)}">${esc(o.fixLabel)}</button>` : ''}</div>`).join('') : '<div class="info chk">Nessun problema trovato: prerequisiti a posto, movimenti completi, nessun comando sparito.</div>'}
+    <h3>Comandi essenziali</h3>
+    <div class="hint">${ess - miss.length} su ${ess} hanno un tasto del joystick. ${miss.length ? 'Senza joystick (puoi comunque usarli da tastiera): ' + esc(miss.slice(0, 14).map(k => actByKey(k).label).join(', ')) + (miss.length > 14 ? '…' : '') : ''}</div>
+    <div class="hint" style="margin-top:8px">La verifica segue una guida scritta a mano (essenziali e prerequisiti): è una prima stesura, se trovi un'indicazione sbagliata segnalala.</div>
+    <div class="btns"><button data-close="1">Chiudi</button></div>`);
+}
 function renderAll() {
-  const f = S.filter, q = f.q.trim().toLowerCase();
+  const f = S.filter, q = f.q.trim().toLowerCase(), qk = (f.qk || '').trim();
+  if (!f.view) f.view = 'ess';
+  f.open = f.open || {};
   let rows = '', shown = 0;
-  for (const m of S.maps) {
-    if (f.map && m.name !== f.map) continue;
-    let part = '';
-    for (const a of (m.actions || [])) {
-      if (!a.visible && !f.hidden) continue;
-      const bs = bindingsOf(a.map, a.name);
-      const js = bs.filter(b => isJsDev(b.dev)), kb = bs.filter(b => b.dev === 'kb' || b.dev === 'mo'), gp = bs.filter(b => b.dev === 'gp');
-      if (f.mode === 'bound' && !js.length) continue;
-      if (f.mode === 'unbound' && js.length) continue;
-      if (q && !(a.label + ' ' + a.labelEn + ' ' + a.name).toLowerCase().includes(q)) continue;
-      const defK = [a.defKb, a.defMo].filter(x => x).map(fmtKeys).join(' / ');
-      const clr = bs.some(b => b.dev === 'jsclear');
-      part += `<tr data-a="${esc(actKey(a.map, a.name))}">
-        <td><div class="lab" title="${esc(a.desc || '')}">${esc(a.label)}${a.axis ? '<span class="ax">asse</span>' : ''}</div><div class="en">${esc(a.labelEn)}</div></td>
+  const cmdRow = (a, cls) => {
+    const bs = bindingsOf(a.map, a.name);
+    const js = bs.filter(b => isJsDev(b.dev)), kb = bs.filter(b => b.dev === 'kb' || b.dev === 'mo'), gp = bs.filter(b => b.dev === 'gp');
+    const defK = [a.defKb, a.defMo].filter(x => x).map(fmtKeys).join(' / ');
+    const clr = bs.some(b => b.dev === 'jsclear');
+    const k = actKey(a.map, a.name), p = prereqFor(k), ps = p ? prereqState(p) : '';
+    const pre = p ? `<div class="pre ${js.length && ps !== 'js' ? 'warn' : ''}" title="${esc(p.testo)}">${js.length && ps !== 'js' ? '⚠ ' : ''}richiede la ${esc(p.nome)}${ps === 'js' ? ' ✓' : js.length ? (ps ? ': attivabile solo da tastiera' : ': nessun comando assegnato') + ` <button class="small" data-chkfix="${esc((p.serve || [])[0])}">assegnala</button>` : ''}</div>` : '';
+    shown++;
+    return `<tr class="${cls || ''}" data-a="${esc(k)}">
+        <td><div class="lab" title="${esc(a.desc || '')}">${esc(a.label)}${a.axis ? '<span class="ax">asse</span>' : ''}</div><div class="en">${esc(a.labelEn)}</div>${pre}</td>
         <td class="c" data-cap="kbm">${kb.map(b => `<span class="chip kb">${esc(kbLabel(b))}${b.multiTap === '2' ? ' ×2' : ''}</span>`).join('') || (defK ? `<span class="def">pred.: ${esc(defK)}</span>` : '<span class="def">—</span>')}</td>
         <td class="c" data-cap="js">${js.map(chipJS).join('') || (clr ? '<span class="def">—</span>' : (a.defJs ? `<span class="def">pred.: ${esc(inputLabel(a.defJs))}${S.profile.clearJsDefaults ? ' (verrà disattivato)' : ''}</span>` : '<span class="def">—</span>'))}</td>
         <td class="c" data-cap="gp">${gp.map(b => `<span class="chip kb">${esc(kbLabel(b))}</span>`).join('') || (a.defGp ? `<span class="def">pred.: ${esc(fmtKeys(a.defGp))}</span>` : '<span class="def">—</span>')}</td></tr>`;
-      shown++;
+  };
+  const searching = q || qk, ess = f.view === 'ess' && !searching && !isED();
+  if (ess) {
+    for (const g of guide().gruppi || []) {
+      let part = '';
+      for (const k of g.comandi) {
+        const a = actByKey(k); if (!a) continue;
+        if (f.mode === 'bound' && !hasJs(k)) continue;
+        if (f.mode === 'unbound' && hasJs(k)) continue;
+        const vs = variantsOf(a), op = f.open[k];
+        part += cmdRow(a);
+        if (vs.length) part += `<tr class="varh"><td colspan="4"><button class="link" data-var="${esc(k)}">${op ? '▾' : '▸'} ${vs.length} ${vs.length === 1 ? 'variante' : 'varianti'} di questo comando${vs.some(v => hasJs(actKey(v.map, v.name))) ? ' (qualcuna è assegnata)' : ''}</button></td></tr>` + (op ? vs.map(v => cmdRow(v, 'var')).join('') : '');
+      }
+      if (part) rows += `<tr class="grp"><td colspan="4">${esc(g.titolo)}<small>${esc(g.nota || '')}</small></td></tr>` + part;
     }
-    if (part) rows += `<tr class="grp"><td colspan="4">${esc(m.label)}<small>${esc(m.category || '')}</small></td></tr>` + part;
+  } else {
+    for (const m of S.maps) {
+      if (f.map && m.name !== f.map) continue;
+      let part = '';
+      for (const a of (m.actions || [])) {
+        if (!a.visible && !f.hidden) continue;
+        const js = bindingsOf(a.map, a.name).some(b => isJsDev(b.dev));
+        if (f.mode === 'bound' && !js) continue;
+        if (f.mode === 'unbound' && js) continue;
+        if (q && !(a.label + ' ' + a.labelEn + ' ' + a.name).toLowerCase().includes(q)) continue;
+        if (qk && !keyMatch(a, qk)) continue;
+        part += cmdRow(a);
+      }
+      if (part) rows += `<tr class="grp"><td colspan="4">${esc(m.label)}<small>${esc(m.category || '')}</small></td></tr>` + part;
+    }
   }
+  const nEss = (guide().gruppi || []).flatMap(g => g.comandi).filter(actByKey).length;
   $('#view').innerHTML = `<div class="toolbar">
+      ${isED() ? '' : `<div class="seg"><button data-fview="ess" class="${f.view === 'ess' ? 'on' : ''}" title="I comandi che servono davvero, raggruppati per situazione">Essenziali (${nEss})</button><button data-fview="all" class="${f.view === 'all' ? 'on' : ''}" title="Tutti i comandi del gioco, per categoria">Tutti</button></div>`}
       <input type="search" id="q" placeholder="Cerca un comando (italiano o inglese)…" value="${esc(f.q)}">
-      <select id="fmap"><option value="">Tutte le categorie</option>${S.maps.filter(m => (m.actions || []).some(a => a.visible || f.hidden)).map(m => `<option value="${esc(m.name)}" ${f.map === m.name ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select>
+      <input type="search" id="qk" placeholder="Tasto tastiera (es. N, alt+Y)" title="Trova il comando che nel gioco sta su quel tasto della tastiera o del mouse. Esempi: N · alt+y · mouse1 · space" value="${esc(f.qk || '')}">
+      ${ess ? '' : `<select id="fmap"><option value="">Tutte le categorie</option>${S.maps.filter(m => (m.actions || []).some(a => a.visible || f.hidden)).map(m => `<option value="${esc(m.name)}" ${f.map === m.name ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select>`}
       <select id="fmode"><option value="all">Tutti</option><option value="bound" ${f.mode === 'bound' ? 'selected' : ''}>Solo assegnati a joystick</option><option value="unbound" ${f.mode === 'unbound' ? 'selected' : ''}>Solo non assegnati</option></select>
-      <label><input type="checkbox" id="fhid" ${f.hidden ? 'checked' : ''}> comandi nascosti</label>
-      <small>${shown} comandi</small></div>
+      ${ess ? '' : `<label><input type="checkbox" id="fhid" ${f.hidden ? 'checked' : ''}> comandi nascosti</label>`}
+      ${isED() ? '' : '<button class="small" id="btnCheck" title="Controlla prerequisiti mancanti, movimenti incompleti e comandi spariti">✓ Verifica</button>'}
+      <small>${shown} comandi${f.view === 'ess' && searching && !isED() ? ' · ricerca in tutti i comandi' : ''}</small></div>
     <div class="scroll"><table class="cmd"><thead><tr><th>Comando</th><th>Tastiera / mouse</th><th>Joystick, manetta, pedali</th><th>Gamepad</th></tr></thead><tbody>${rows || '<tr><td colspan="4">Nessun comando trovato.</td></tr>'}</tbody></table></div>`;
 }
 
@@ -362,7 +485,7 @@ function renderDevice() {
   const inp = deviceInputs(key);
   const adv = S.advDetail[key] || { axes: {}, groups: {} };
   const num = v => { const f = parseFloat(v); return isFinite(f) ? String(Math.round(f * 100) / 100).replace('.', ',') : v; };
-  const ADVT = 'Si regola nel gioco (Opzioni > Controlli). L\'app lo legge dal file del gioco, lo conserva e lo tiene legato a questa periferica anche se il suo numero js cambia.';
+  const ADVT = 'Valori letti dal file del gioco e legati a questa periferica. Con «regola» li cambi dall\'app: arrivano nel gioco quando premi «Scrivi nel gioco».';
   // zona morta e saturazione dell'asse fisico
   const axisAdv = input => {
     if (isED() || !AXN[input]) return '';
@@ -385,7 +508,7 @@ function renderDevice() {
     return `<div class="row ${S.placing === input ? 'placing' : ''} ${ign ? 'ign' : ''}" data-live="${input}" data-input="${input}">
       <span class="led"></span><div><b>${esc(inputLabel(input))}</b>${extra || ''}${axisAdv(input)}</div>
       <div>${isED() ? edChips(key, input) : bs.map((b, i) => `<span class="chip" title="${esc((actOf(b) || {}).labelEn || '')}">${esc(actLabel(b))}${b.multiTap === '2' ? ' ×2' : ''} <small>${esc(mapLabel(b.map))}</small> <span class="x" data-rm="${i}" title="Rimuovi">×</span></span>${curveAdv(b)}${invBox(b)}`).join('')}${ign ? '<span class="def">ignorato: l\'app non lo rileva</span>' : ''}</div>
-      <div><button class="small" data-add="1" title="Assegna un comando a questo ingresso">+ comando</button> <button class="small" data-ign="1" title="${ign ? 'Torna a rilevare questo ingresso' : 'Ignora questo ingresso: non viene più rilevato né evidenziato (utile per interruttori sempre accesi o assi che tremano)'}">${ign ? 'riattiva' : 'ignora'}</button>${(di.image || '').startsWith('img:') ? ` <button class="small" data-place="1" title="Posiziona l'etichetta sull'immagine">📍</button>` : ''}</div></div>`;
+      <div><button class="small" data-add="1" title="Assegna un comando a questo ingresso">+ comando</button> ${!isED() && AXN[input] ? '<button class="small" data-advx="1" title="Regola zona morta, saturazione e curva di questo asse">⚙ regola</button> ' : ''}<button class="small" data-ign="1" title="${ign ? 'Torna a rilevare questo ingresso' : 'Ignora questo ingresso: non viene più rilevato né evidenziato (utile per interruttori sempre accesi o assi che tremano)'}">${ign ? 'riattiva' : 'ignora'}</button>${(di.image || '').startsWith('img:') ? ` <button class="small" data-place="1" title="Posiziona l'etichetta sull'immagine">📍</button>` : ''}</div></div>`;
   };
   let list = '';
   if (inp.axes.length) list += '<div class="sect">Assi</div>' + inp.axes.map((a, i) => rowFor(a, `<div class="bar"><i data-axis="${a}"></i></div>`)).join('');
@@ -530,6 +653,49 @@ async function renderImage() {
     ? (S.placing ? `Ora clicca sull'immagine nel punto in cui si trova <b>${esc(inputLabel(S.placing))}</b>.` : 'Premi un tasto sulla periferica (oppure 📍 nella lista a destra), poi clicca sull\'immagine dove si trova.')
     : 'Usa <b>Posiziona etichette</b> per indicare dove si trova ogni tasto. Clic su un\'etichetta per assegnare un comando; clic destro per toglierla.';
 }
+// ---------- regolazione di zona morta, saturazione e curva di un asse ----------
+function showAxisAdv(key, input) {
+  const adv = S.advDetail[key] || { axes: {}, groups: {} }, cur = adv.axes[input] || {};
+  const groups = [...new Set(S.profile.bindings.filter(b => b.dev === key && b.input === input).map(b => actOf(b)).filter(a => a && a.optGroup).map(a => a.optGroup))];
+  const gl = g => [...new Set(S.profile.bindings.filter(b => b.dev === key && b.input === input).map(b => actOf(b)).filter(a => a && a.optGroup === g).map(a => a.label))].join(', ');
+  const f = (v, d) => { const x = parseFloat(v); return isFinite(x) ? x : d; };
+  openModal(`<h2>Regola ${esc(inputLabel(input))} <small style="font-weight:400;color:var(--dim)">${esc(devName(key))}</small></h2>
+    <div class="axadv"><canvas id="axcv" width="300" height="300"></canvas>
+      <div class="axf">
+        <label>Zona morta <input type="number" id="axdz" min="0" max="0.5" step="0.01" value="${f(cur.deadzone, 0)}"><span class="hint">0 = nessuna. È la parte centrale in cui l'asse non risponde: serve se la nave si muove da sola a leva ferma.</span></label>
+        <label>Saturazione <input type="number" id="axsat" min="0.1" max="1" step="0.01" value="${f(cur.saturation, 1)}"><span class="hint">1 = standard. Più è bassa, prima l'asse arriva al 100%.</span></label>
+        ${groups.map(g => { const G = adv.groups[g] || {}; return G.points ? `<div class="hint">Curva di «${esc(gl(g))}»: personalizzata nel gioco (${G.points} punti). Si modifica dal gioco; l'app la conserva.</div>` : `<label>Curva di «${esc(gl(g))}» (esponente) <input type="number" class="axexp" data-g="${esc(g)}" min="0.1" max="5" step="0.05" value="${f(G.exponent, 1)}"><span class="hint">1 = lineare. Sopra 1 l'asse è più dolce vicino al centro e più rapido a fondo corsa.</span></label>`; }).join('') || '<div class="hint">La curva si regola per movimento: assegna prima un comando di volo a questo asse.</div>'}
+        <div class="hint">Il pallino giallo è la posizione attuale dell'asse. Il grafico è indicativo: l'ultima parola spetta al gioco.</div>
+      </div></div>
+    <div class="hint" style="margin-top:8px">Zona morta e saturazione valgono per tutte le periferiche di questo stesso modello. Le modifiche arrivano nel gioco quando premi «Scrivi nel gioco».</div>
+    <div class="btns"><button id="axstd">Valori standard</button><span style="flex:1"></span><button data-close="1">Annulla</button><button class="primary" id="axok">Applica</button></div>`);
+  const cv = $('#axcv'), g2 = cv.getContext('2d');
+  const read = () => ({ dz: Math.min(0.5, Math.max(0, f($('#axdz').value, 0))), sat: Math.min(1, Math.max(0.1, f($('#axsat').value, 1))), ex: Math.min(5, Math.max(0.1, f(($('.axexp') || {}).value, 1))) });
+  const resp = (x, p) => { const a = Math.abs(x); if (a <= p.dz) return 0; return Math.sign(x) * Math.pow(Math.min(1, (a - p.dz) / Math.max(0.01, p.sat - p.dz)), p.ex); };
+  const draw = () => {
+    if (!cv.isConnected) return;
+    const p = read(), W = cv.width, m = 18, s = (W - 2 * m) / 2, X = x => m + (x + 1) * s, Y = y => W - m - (y + 1) * s;
+    g2.clearRect(0, 0, W, W); g2.fillStyle = '#0b1220'; g2.fillRect(0, 0, W, W);
+    g2.fillStyle = 'rgba(255,180,84,.13)'; g2.fillRect(X(-p.dz), m, X(p.dz) - X(-p.dz), W - 2 * m);
+    g2.strokeStyle = '#26354e'; g2.lineWidth = 1; g2.beginPath(); g2.moveTo(X(-1), Y(0)); g2.lineTo(X(1), Y(0)); g2.moveTo(X(0), Y(-1)); g2.lineTo(X(0), Y(1)); g2.rect(m, m, 2 * s, 2 * s); g2.stroke();
+    g2.strokeStyle = '#33415a'; g2.setLineDash([4, 4]); g2.beginPath(); g2.moveTo(X(-1), Y(-1)); g2.lineTo(X(1), Y(1)); g2.stroke(); g2.setLineDash([]);
+    g2.strokeStyle = '#3aa0ff'; g2.lineWidth = 2.5; g2.beginPath();
+    for (let i = 0; i <= 200; i++) { const x = -1 + i / 100, y = resp(x, p); i ? g2.lineTo(X(x), Y(y)) : g2.moveTo(X(x), Y(y)); }
+    g2.stroke();
+    const st = S.input[key], raw = st && st.a && st.a[input] !== undefined ? st.a[input] / 65535 * 2 - 1 : null;
+    if (raw !== null) { g2.fillStyle = '#ffd23f'; g2.beginPath(); g2.arc(X(raw), Y(resp(raw, p)), 6, 0, 6.3); g2.fill(); }
+    requestAnimationFrame(draw);
+  };
+  draw();
+  const txt = (v, std) => Math.abs(v - std) < 0.0005 ? '' : String(Math.round(v * 1000) / 1000);
+  $('#axstd').onclick = () => { $('#axdz').value = 0; $('#axsat').value = 1; $$('.axexp').forEach(e => { e.value = 1; }); };
+  $('#axok').onclick = () => {
+    const p = read(), di = devInfo(key); di.adv = di.adv || {}; di.adv.axes = di.adv.axes || {}; di.adv.exp = di.adv.exp || {};
+    di.adv.axes[input] = { deadzone: txt(p.dz, 0), saturation: txt(p.sat, 1) };
+    $$('.axexp').forEach(e => { di.adv.exp[e.dataset.g] = txt(Math.min(5, Math.max(0.1, f(e.value, 1))), 1); });
+    closeModal(); saveProfile().then(pollState);
+  };
+}
 // ---------- informazioni e ringraziamenti ----------
 const REFERRAL = 'STAR-D22F-7ZTY';
 function showAbout() {
@@ -575,16 +741,15 @@ function showGameChange() {
 }
 
 // ---------- guida introduttiva ----------
-const NEWS = { ver: '4.7', items: [
-  'Nella pagina di una periferica ogni asse ora mostra zona morta e saturazione impostate nel gioco (o «standard»), e accanto al comando la curva o l\'esponente del movimento.',
-  'Anteprima 3D: la traslazione verticale ora va nello stesso verso del gioco (prima era al contrario, quindi chi invertiva l\'asse per volare bene vedeva la nave muoversi al rovescio).',
-  'Sotto la firma, in fondo alla colonna di sinistra, c\'è un collegamento diretto ai ringraziamenti.',
-  'Nuova finestra «Informazioni e ringraziamenti» (menu ⋯, oppure la firma in fondo alla colonna di sinistra).',
-  'Corretto l\'errore di avvio della 4.3 («Cannot read properties of null») che compariva quando il gioco aveva comandi nuovi ma nessuno rimosso, o viceversa.',
-  'L\'elenco dei comandi di Star Citizen ora viene letto direttamente dal gioco installato: a ogni aggiornamento del gioco l\'app si allinea da sola e ti dice quali comandi sono nuovi o spariti.',
-  'Questa guida: parte al primo avvio e dopo ogni aggiornamento, e la ritrovi nel menu ⋯ > Guida introduttiva.',
-  'Stampa / PDF dello schema di ogni periferica con i comandi assegnati (dalla 4.2).',
-  'Aggiornamento automatico del programma all\'avvio (dalla 4.1).',
+const NEWS = { ver: '5.0', items: [
+  '<b>Essenziali</b>: «Tutti i comandi» ora si apre sui comandi che servono davvero, raggruppati per situazione (decollo, volo, quantum, combattimento, atterraggio…). Con «Tutti» torni all\'elenco completo.',
+  '<b>Prerequisiti</b>: se assegni un comando che funziona solo in una certa modalità (missili, mining, scanner, quantum…) l\'app ti avvisa quando ti manca il tasto che la attiva.',
+  '<b>✓ Verifica</b>: controlla in un colpo prerequisiti mancanti, movimenti assegnati a metà e comandi che il gioco non ha più.',
+  '<b>Ricerca per tasto della tastiera</b> e <b>varianti raggruppate</b>: scrivi «N» o «alt+Y» per trovare il comando che nel gioco sta su quel tasto; le versioni simili dello stesso comando stanno insieme.',
+  '<b>Zona morta, saturazione e curva dall\'app</b>: nella pagina della periferica ogni asse ha «⚙ regola», con il grafico della risposta che si muove con lo stick.',
+  '<b>Layout su file</b>: da «Gestisci» esporti il layout in un file e lo reimporti (copia di sicurezza, altro PC).',
+  '<b>Foglio «comandi per funzione»</b> dal menu ⋯: l\'elenco comando → tasto, da stampare o salvare in PDF.',
+  '<b>Elite Dangerous</b>: ora ha anche l\'anteprima 3D della nave e i layout.',
 ] };
 function tourSteps() {
   const dev = (S.devices.find(d => !d.gamepad) || {}).key || Object.keys(S.profile.devices || {})[0];
@@ -596,13 +761,13 @@ function tourSteps() {
     { t: 'Parti da quello che hai già', sel: '#btnImport', h: '<b>Importa dal gioco</b> carica nell\'app i comandi che hai già assegnato nel gioco, così non ricominci da zero. Al primo avvio l\'app lo fa da sola.' },
     { t: 'Le tue periferiche', sel: '#devlist', h: 'L\'app rileva da sola le periferiche collegate. Il riquadro <b>js1, js2…</b> è il numero che ogni periferica ha nel gioco; diventa giallo quando premi qualcosa su quella periferica.<br><br>Se colleghi o scolleghi una periferica i numeri si aggiornano da soli e i comandi restano legati alla periferica giusta. Clicca una periferica per aprirla.', pre: toAll },
     { t: 'Lo schema della periferica', sel: '.imgcol', only: 'dev', h: 'Ogni periferica ha il suo <b>schema</b> con tutti i tasti e gli assi. <b>Premi un tasto vero</b>: la casella corrispondente si illumina di giallo, così sai sempre qual è.<br><br>Clicca una casella per assegnarle un comando. Dal menu a tendina in alto puoi scegliere un altro schema, oppure caricare una tua foto e mettere tu le etichette.', pre: toDev },
-    { t: 'Assegnare un comando', sel: '.inpcol', only: 'dev', h: 'A destra c\'è l\'elenco di assi e pulsanti. <b>+ comando</b> apre la ricerca: i comandi sono tradotti in italiano, con il nome inglese accanto.<br><br>Sullo stesso tasto puoi mettere <b>più comandi</b>. Con <b>inverti</b> giri il verso di un asse, con <b>ignora</b> escludi un ingresso che disturba (per esempio un interruttore sempre acceso).', pre: toDev },
+    { t: 'Assegnare un comando', sel: '.inpcol', only: 'dev', h: 'A destra c\'è l\'elenco di assi e pulsanti. <b>+ comando</b> apre la ricerca: i comandi sono tradotti in italiano, con il nome inglese accanto.<br><br>Sullo stesso tasto puoi mettere <b>più comandi</b>. Con <b>inverti</b> giri il verso di un asse, con <b>ignora</b> escludi un ingresso che disturba (per esempio un interruttore sempre acceso). Sugli assi, <b>⚙ regola</b> imposta zona morta, saturazione e curva.', pre: toDev },
     { t: 'Stampa o PDF', sel: '#prn', only: 'dev', h: '<b>Stampa / PDF</b> mette su un foglio A4 lo schema con i comandi assegnati, da tenere sottomano mentre giochi. Per un PDF scegli «Salva come PDF» nella finestra di stampa. Dal menu <b>⋯</b> puoi stampare tutte le periferiche insieme.', pre: toDev },
-    { t: 'Tutti i comandi', sel: '#navAll', h: 'Qui lavori al contrario: parti dal <b>comando</b>. Cercalo per nome, clicca la sua casella nella colonna dei joystick e premi il tasto (o muovi l\'asse) che vuoi usare: l\'app lo riconosce da sola.<br><br>Vedi anche i tasti predefiniti di tastiera, mouse e gamepad.', pre: toAll },
-    { t: 'Anteprima 3D della nave', sel: '#navShip', sc: true, h: 'Muovi gli stick e guarda la nave: controlli subito se beccheggio, rollio, imbardata e traslazioni rispondono come vuoi, prima di entrare in gioco. Da qui puoi anche assegnare o invertire gli assi di volo.' },
-    { t: 'Layout', sel: '#layout', sel2: '#btnLayout', h: 'Puoi tenere <b>più layout</b> con un nome (volo, mining, combattimento…) e passare dall\'uno all\'altro. Con <b>Gestisci</b> li crei, li duplichi, li rinomini e li elimini.' },
+    { t: 'Tutti i comandi', sel: '#navAll', h: 'Qui lavori al contrario: parti dal <b>comando</b>. La vista <b>Essenziali</b> mostra solo quelli che servono davvero, divisi per situazione; <b>Tutti</b> mostra l\'elenco completo. Cercalo per nome (o, nella seconda casella, scrivi il tasto della tastiera che usi nel gioco), clicca la sua casella nella colonna dei joystick e premi il tasto (o muovi l\'asse) che vuoi usare: l\'app lo riconosce da sola.<br><br><b>✓ Verifica</b> controlla che non manchi niente: modalità senza il tasto per attivarle, movimenti a metà, comandi spariti dal gioco.', pre: toAll },
+    { t: 'Anteprima 3D della nave', sel: '#navShip', h: 'Muovi gli stick e guarda la nave: controlli subito se beccheggio, rollio, imbardata e traslazioni rispondono come vuoi, prima di entrare in gioco. Da qui puoi anche assegnare o invertire gli assi di volo.' },
+    { t: 'Layout', sel: '#layout', sel2: '#btnLayout', h: 'Puoi tenere <b>più layout</b> con un nome (volo, mining, combattimento…) e passare dall\'uno all\'altro. Con <b>Gestisci</b> li crei, li duplichi, li rinomini, li elimini, li <b>esporti su file</b> e li reimporti.' },
     { t: 'Scrivere nel gioco', sel: '#btnWrite', sel2: '#sync', h: 'Quando hai finito, <b>chiudi il gioco</b> e premi <b>Scrivi nel gioco</b>. L\'app salva il file dei comandi nella cartella del gioco e prima ne fa sempre una copia di sicurezza (cartella <i>dati\\backup</i>).<br><br>La scritta accanto ti dice se il gioco è allineato o se hai modifiche ancora da scrivere.' },
-    { t: 'Il menu ⋯', sel: '#btnMenu', h: 'Nel menu trovi: anteprima del file, cartelle del gioco e dei dati, stampa di tutte le periferiche, <b>Opzioni</b>, <b>Diagnostica periferiche</b> (da mandare se qualcosa non va) e questa guida.' },
+    { t: 'Il menu ⋯', sel: '#btnMenu', h: 'Nel menu trovi: anteprima del file, cartelle del gioco e dei dati, stampa di tutte le periferiche e del foglio «comandi per funzione», <b>Opzioni</b>, <b>Diagnostica periferiche</b> (da mandare se qualcosa non va) e questa guida.' },
     { t: 'Sempre aggiornato', h: '<b>Il programma</b>: all\'avvio controlla se è uscita una versione nuova, la scarica e passa da solo a quella (si disattiva dalle Opzioni).<br><br><b>I comandi di Star Citizen</b>: l\'app legge la versione del gioco installato e, quando il gioco si aggiorna, rilegge l\'elenco dei comandi dai suoi file e ti mostra quali sono nuovi o spariti. I comandi nuovi possono comparire in inglese finché non arriva la traduzione.' },
     { t: 'Fatto!', h: 'Per cominciare: controlla l\'installazione, clicca una periferica, premi un tasto e assegnagli un comando. Poi chiudi il gioco e premi <b>Scrivi nel gioco</b>.<br><br>Se il programma ti è utile, in <b>⋯ > Informazioni e ringraziamenti</b> trovi un modo per dire grazie.<br><br>Buon volo! o7' },
   ];
@@ -715,6 +880,32 @@ async function printDevices(keys) {
   window.addEventListener('afterprint', done);
   window.print();
 }
+// foglio "per funzione": comando -> dove si trova, raggruppato come gli Essenziali (poi tutto il resto)
+function printFunctions() {
+  const root = document.createElement('div'); root.id = 'printroot';
+  const where = b => (jsNum(b.dev) ? 'js' + jsNum(b.dev) + ' ' : '') + devName(b.dev).slice(0, 20) + ' · ' + inputLabel(b.input) + (b.multiTap === '2' ? ' ×2' : '');
+  const groups = [];
+  if (isED()) {
+    const by = {}, B = edB();
+    for (const tag in B) { const c = edCmd(tag), w = ['p', 's', 'a'].map(sl => edSlotLabel(B[tag][sl])).filter(Boolean); if (w.length) (by[c.group] = by[c.group] || []).push([c.it || c.en, w.join('  |  ')]); }
+    for (const g in by) groups.push([g, by[g]]);
+  } else {
+    const done = new Set(), row = k => { const [m, n] = k.split('/'), bs = bindingsOf(m, n).filter(b => isJsDev(b.dev) && S.profile.devices[b.dev]); done.add(k); if (!bs.length) return null; return [(actByKey(k) || {}).label || n, bs.map(where).join('  |  ')]; };
+    for (const g of guide().gruppi || []) { const r = (g.comandi || []).filter(k => !done.has(k)).map(row).filter(Boolean); if (r.length) groups.push([g.titolo, r]); }
+    const rest = {};
+    for (const b of S.profile.bindings) { const k = actKey(b.map, b.action); if (done.has(k) || !isJsDev(b.dev)) continue; const r = row(k); if (r) (rest[mapLabel(b.map)] = rest[mapLabel(b.map)] || []).push(r); }
+    for (const g in rest) groups.push([g, rest[g]]);
+  }
+  if (!groups.length) return toast('Nessun comando assegnato alle periferiche: niente da stampare.', true);
+  const sub = `${isED() ? 'Elite Dangerous' : 'Star Citizen' + (S.profile.layout ? ' · layout «' + esc(S.profile.layout) + '»' : '')} · ${new Date().toLocaleDateString('it-IT')}`;
+  const s = document.createElement('section'); s.className = 'pp port flow';
+  s.innerHTML = `<div class="pph"><div><b>Comandi per funzione</b> — dove si trova ogni comando</div><span>${sub} · ScEd Binder v${esc(S.version)}</span></div>
+    <div class="ppf">${groups.map(([t, r]) => `<div class="ppg"><h4>${esc(t)}</h4>${r.map(([a, w]) => `<div><b>${esc(a)}</b><span>${esc(w)}</span></div>`).join('')}</div>`).join('')}</div>`;
+  root.appendChild(s); document.body.appendChild(root);
+  const done2 = () => { root.remove(); window.removeEventListener('afterprint', done2); };
+  window.addEventListener('afterprint', done2);
+  window.print();
+}
 // ---------- modelli con foto ----------
 const VALID_IN = /^(button\d+|hat\d_(up|down|left|right)|x|y|z|rot[xyz]|slider[12])$/;
 function photoInputs(key, tpl, ctl) { const m = ((devInfo(key).photoMap || {})[tpl.id] || {})[ctl.id]; return m && m.length === ctl.inputs.length ? m : ctl.inputs; }
@@ -794,6 +985,31 @@ const MOVES = [
   { id: 'lon', label: 'Avanti / indietro', hint: ['indietro', 'avanti'], axis: 'v_strafe_longitudinal', pos: 'v_strafe_forward', neg: 'v_strafe_back', sign: -1 },
 ];
 const FM = 'spaceship_movement';
+// Elite: stessi sei movimenti, con i nomi del file .binds (versi non ancora verificati in volo)
+const ED_MOVES = { pitch: ['PitchAxisRaw', 'PitchUpButton', 'PitchDownButton'], yaw: ['YawAxisRaw', 'YawRightButton', 'YawLeftButton'], roll: ['RollAxisRaw', 'RollRightButton', 'RollLeftButton'],
+  lat: ['LateralThrustRaw', 'RightThrustButton', 'LeftThrustButton'], vert: ['VerticalThrustRaw', 'UpThrustButton', 'DownThrustButton'], lon: ['AheadThrust', 'ForwardThrustButton', 'BackwardThrustButton'] };
+function edSlotValue(s, axis) {
+  if (edEmpty(s)) return 0; const key = edKeyOf(s), p = edParseKey(s.k), st = key && S.input[key]; if (!p || !st) return 0;
+  if (AXN[p.input]) { let v = ((st.a || {})[p.input] ?? 32767.5) / 32767.5 - 1; if (Math.abs(v) < 0.04) v = 0; if (axis) return v; return p.half === 'Neg' ? Math.max(0, -v) : Math.max(0, v); }
+  return activeInputs(st).has(p.input) ? 1 : 0;
+}
+function edMoveValue(m) {
+  const e = ED_MOVES[m.id], B = edB(), ax = B[e[0]] || {}, btn = t => Math.max(edSlotValue((B[t] || {}).p), edSlotValue((B[t] || {}).s));
+  let v = edSlotValue(ax.a, true) * (ax.inv ? -1 : 1) * m.sign;
+  v += btn(e[1]) - btn(e[2]);
+  return Math.max(-1, Math.min(1, v));
+}
+function renderShipED() {
+  const B = edB(), txt = (t, sl) => { const l = (sl ? [sl] : ['p', 's']).map(x => edSlotLabel((B[t] || {})[x])).filter(Boolean).join(' / '); return l ? esc(l) : '<span class="def">non assegnato</span>'; };
+  const rows = MOVES.map(m => { const e = ED_MOVES[m.id]; return `<div class="mv"><div class="mvh"><b>${m.label}</b><span class="mvd" id="mvd_${m.id}"></span></div>
+      <div class="mbar"><i id="mv_${m.id}"></i></div>
+      <div class="mvb">Asse: ${txt(e[0], 'a')}${(B[e[0]] || {}).inv ? ' <small>(invertito)</small>' : ''}</div>
+      <div class="mvb2"><span>◀ ${m.hint[0]}: ${txt(e[2])}</span><span>${m.hint[1]} ▶: ${txt(e[1])}</span></div></div>`; }).join('');
+  $('#view').innerHTML = `<div class="toolbar"><h2>Anteprima 3D — movimenti della nave (Elite Dangerous)</h2><small>Muovi le periferiche: la nave risponde ai comandi di volo assegnati.</small></div>
+    <div class="shipwrap"><div class="shipcv"><canvas id="ship"></canvas></div><div class="shiplist">${rows}
+    <p class="hint">I comandi si assegnano dalla pagina della periferica o da «Tutti i comandi». I versi dei movimenti in Elite non sono ancora stati confrontati con il gioco: se la nave qui va al contrario di come vola davvero, segnalalo.</p></div></div>`;
+  if (!S.shipLoop) { S.shipLoop = true; S.shipV = {}; requestAnimationFrame(shipFrame); }
+}
 function jsBinding(name) { return bindingsOf(FM, name).find(b => isJsDev(b.dev)); }
 function bindingValue(b) { // -1..1 per un asse, 0/1 per un pulsante
   if (!b) return 0;
@@ -819,6 +1035,7 @@ function moveValue(m) {
   return Math.max(-1, Math.min(1, v));
 }
 function renderShip() {
+  if (isED()) return renderShipED();
   const bindTxt = name => { const b = jsBinding(name); return b ? `${jsNum(b.dev) ? 'js' + jsNum(b.dev) : 'scollegata'} · ${esc(inputLabel(b.input))} <small>${esc(devName(b.dev).slice(0, 24))}</small>` : '<span class="def">non assegnato — clicca per assegnare</span>'; };
   const invHalf = name => { const b = jsBinding(name), act = S.actions.get(actKey(FM, name)); return b && AXN[b.input] && act && act.canInvert ? `<label class="inv"><input type="checkbox" data-inv="${esc(act.optGroup)}" data-dev="${esc(b.dev)}" ${invertState(b.dev, act.optGroup) ? 'checked' : ''}> inverti</label>` : ''; };
   const rows = MOVES.map(m => {
@@ -858,7 +1075,7 @@ function shipFrame() {
   const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
   const v = S.shipV;
   for (const m of MOVES) {
-    const t = moveValue(m); v[m.id] = (v[m.id] || 0) + (t - (v[m.id] || 0)) * 0.18;
+    const t = isED() ? edMoveValue(m) : moveValue(m); v[m.id] = (v[m.id] || 0) + (t - (v[m.id] || 0)) * 0.18;
     const bar = $('#mv_' + m.id), lab = $('#mvd_' + m.id);
     if (bar) { const w = Math.abs(t) * 50; bar.style.width = w + '%'; bar.style.left = (t < 0 ? 50 - w : 50) + '%'; }
     if (lab) lab.textContent = Math.abs(t) < 0.05 ? '' : m.hint[t > 0 ? 1 : 0] + ' ' + Math.round(Math.abs(t) * 100) + '%';
@@ -1269,11 +1486,17 @@ $('#btnMenu').onclick = e => { e.stopPropagation(); $('#lymenu').classList.add('
 $('#btnLayout').onclick = e => { e.stopPropagation(); $('#menu').classList.add('hidden'); const m = $('#lymenu'); m.style.left = e.target.getBoundingClientRect().left + 'px'; m.classList.toggle('hidden'); };
 $('#lymenu').addEventListener('click', e => { if (e.target.dataset.ly) layoutAction(e.target.dataset.ly); });
 $('#layout').onchange = e => switchLayout(e.target.value);
+$('#lyfile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importLayoutFile(f); };
 document.addEventListener('click', () => { $('#menu').classList.add('hidden'); $('#lymenu').classList.add('hidden'); });
 $('#install').onchange = e => { S.profile.install = e.target.value; saveProfile().then(pollState); };
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal' || e.target.dataset.close) closeModal(); });
 document.addEventListener('click', e => {
   const t = e.target; if (!t || !t.dataset) return;
+  if (t.dataset.fview) { S.filter.view = t.dataset.fview; renderAll(); return; }
+  if (t.dataset.var) { S.filter.open = S.filter.open || {}; S.filter.open[t.dataset.var] = !S.filter.open[t.dataset.var]; renderAll(); e.stopPropagation(); return; }
+  if (t.id === 'btnCheck') { showCheck(); return; }
+  if (t.dataset.advx) { const r = t.closest('.row'); e.stopPropagation(); if (r && S.view.type === 'dev') showAxisAdv(S.view.key, r.dataset.input); return; }
+  if (t.dataset.chkfix) { const act = S.actions.get(t.dataset.chkfix); e.stopPropagation(); if (act) { closeModal(); startCapture(act, 'js'); } return; }
   if (t.id === 'gchange') showGameChange();
   if (t.dataset.gdismiss) { S.profile.gameDataSeen = t.dataset.gdismiss; saveProfile(); if (!t.dataset.close) render(); }
 }, true);
@@ -1295,6 +1518,7 @@ $('#menu').addEventListener('click', async e => {
     if (a === 'opengame') { if (inst) await api('/api/open', { what: 'game', path: inst.path }); }
     if (a === 'opendata') await api('/api/open', { what: 'dati' });
     if (a === 'tour') { startTour(true); }
+    if (a === 'printfn') printFunctions();
     if (a === 'printall') { const ks = printableKeys(); if (!ks.length) toast('Nessuna periferica ha ancora comandi assegnati.', true); else await printDevices(ks); }
     if (a === 'log') { const r = await api('/api/log'); openModal(`<h2>Diagnostica periferiche</h2><div class="en">Se una periferica non viene letta bene, copia questo testo e mandalo a chi ti ha fatto l'app.</div><pre>${esc(r.join('\n'))}\n\n${esc(JSON.stringify(S.devices, null, 1))}</pre><div class="btns"><button data-close="1">Chiudi</button></div>`); }
     if (a === 'about') showAbout();
@@ -1328,6 +1552,7 @@ $('#devlist').addEventListener('click', e => {
 });
 $('#view').addEventListener('input', e => {
   if (e.target.id === 'edq') { S.edFilter.q = e.target.value; const pos = e.target.selectionStart; renderAllED(); const q = $('#edq'); q.focus(); q.setSelectionRange(pos, pos); }
+  if (e.target.id === 'qk') { S.filter.qk = e.target.value; const pos = e.target.selectionStart; renderAll(); const q = $('#qk'); q.focus(); q.setSelectionRange(pos, pos); }
   if (e.target.id === 'q') { S.filter.q = e.target.value; const pos = e.target.selectionStart; renderAll(); const q = $('#q'); q.focus(); q.setSelectionRange(pos, pos); }
 });
 $('#view').addEventListener('change', async e => {
@@ -1376,6 +1601,7 @@ $('#view').addEventListener('click', e => {
   // tabella di tutti i comandi
   const cell = t.closest('td.c');
   if (cell) { const act = S.actions.get(cell.parentElement.dataset.a); if (act) startCapture(act, cell.dataset.cap); return; }
+  if (S.view.type === 'ship' && isED()) return;
   if (S.view.type === 'ship') { const r = t.closest('[data-bind]'); if (r && !t.closest('.inv')) { const act = S.actions.get(r.dataset.bind); if (act) startCapture(act, 'js'); } return; }
   if (S.view.type !== 'dev') return;
   const key = S.view.key, di = devInfo(key);

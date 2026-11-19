@@ -174,6 +174,11 @@ body.prn-measure .devwrap,body.prn-measure main,body.prn-measure #view{overflow:
 .ppt{align-self:stretch;columns:3;column-gap:22px;font-size:12.5px}
 .ppt div{break-inside:avoid;padding:2px 0;border-bottom:1px solid #ddd}
 .ppt b{display:inline-block;min-width:92px}
+.pp.flow{height:auto!important;overflow:visible;display:block;page-break-inside:auto;break-inside:auto}
+.ppf{columns:2;column-gap:26px;font-size:12px;color:#000}
+.ppg{margin-bottom:10px}.ppg h4{margin:0 0 3px;font-size:13.5px;border-bottom:2px solid #003a75;color:#003a75;break-after:avoid}
+.ppg div{display:flex;gap:10px;justify-content:space-between;padding:2px 0;border-bottom:1px solid #ddd;break-inside:avoid}
+.ppg div b{font-weight:600}.ppg div span{color:#003a75;text-align:right}
 @page{size:A4 landscape;margin:8mm}
 @page land{size:A4 landscape;margin:8mm}
 @page port{size:A4 portrait;margin:8mm}
@@ -224,3 +229,26 @@ body.prn-measure .devwrap,body.prn-measure main,body.prn-measure #view{overflow:
 .advx{font-size:11.5px;color:var(--dim);opacity:.75;margin-top:2px;font-weight:400}
 .advx.on{color:#ffd98a;opacity:1}
 .advc{display:inline-block;font-size:11.5px;color:#ffd98a;border:1px solid rgba(255,217,138,.4);border-radius:6px;padding:1px 7px;margin:2px 4px 2px 0}
+
+/* ---- guida ai comandi ---- */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:none}
+.seg button{border:0;border-radius:0;background:transparent;color:var(--dim);padding:7px 12px;cursor:pointer;font:inherit}
+.seg button.on{background:var(--acc);color:#04121f;font-weight:700}
+#qk{max-width:210px}
+.pre{font-size:11.5px;color:var(--dim);margin-top:3px}
+.pre.warn{color:#ffb454}
+.pre .small{padding:1px 7px;font-size:11px;margin-left:4px}
+tr.varh td{padding:0 12px 6px 22px;border:0}
+button.link{background:none;border:0;color:var(--acc);cursor:pointer;font:inherit;font-size:12px;padding:0}
+tr.var td:first-child{padding-left:30px}
+tr.var{background:rgba(58,160,255,.04)}
+.chk{margin:8px 0;line-height:1.45}
+.chk .small{margin-left:6px}
+
+/* ---- regolazione asse ---- */
+.axadv{display:flex;gap:18px;align-items:flex-start;margin-top:10px}
+.axadv canvas{border:1px solid var(--line);border-radius:8px;flex:none}
+.axf{display:flex;flex-direction:column;gap:12px;min-width:0}
+.axf label{display:flex;flex-direction:column;gap:4px;font-weight:600}
+.axf input{width:110px}
+.axf .hint{font-weight:400}

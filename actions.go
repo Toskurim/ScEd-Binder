@@ -12,7 +12,7 @@ import (
 	"sync"
 )
 
-//go:embed data/defaultProfile.xml data/labels_en.json data/labels_it.json
+//go:embed data/defaultProfile.xml data/labels_en.json data/labels_it.json data/guida_comandi.json
 var dataFS embed.FS
 
 type Action struct {
@@ -236,4 +236,13 @@ func loadActions() error {
 	actionMaps, actionIndex, invertDefaults, gameDataNote = maps, idx, inv, note
 	actMu.Unlock()
 	return nil
+}
+
+// loadGuide: comandi essenziali e prerequisiti. Un file dati\guida_comandi.json corretto a mano ha la precedenza.
+func loadGuide() json.RawMessage {
+	if b, err := os.ReadFile(filepath.Join(dataDir(), "guida_comandi.json")); err == nil && json.Valid(b) && len(b) > 50 {
+		return b
+	}
+	b, _ := dataFS.ReadFile("data/guida_comandi.json")
+	return b
 }

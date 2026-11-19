@@ -12,22 +12,26 @@ Assegna i comandi di **Star Citizen** e di **Elite Dangerous** a joystick, manet
 
 ![Video dimostrativo di ScEd Binder](docs/ScEd_Binder_demo.gif)
 
-Un minuto e mezzo, senza audio: rilevamento delle periferiche, schema con i tasti, assegnazione dei comandi, anteprima 3D, numerazione automatica, layout, scrittura nel gioco ed Elite Dangerous. Versione in alta definizione: [`docs/ScEd_Binder_demo.mp4`](docs/ScEd_Binder_demo.mp4). Il video è girato con periferiche simulate.
+Senza audio, girato con la versione 5.0: periferiche e schema con i tasti, comandi essenziali, verifica, regolazione degli assi, anteprima 3D, layout, stampa, scrittura nel gioco ed Elite Dangerous. Versione in alta definizione: [`docs/ScEd_Binder_demo.mp4`](docs/ScEd_Binder_demo.mp4). Il video è girato con periferiche simulate.
 
-Per **Elite Dangerous** (dalla versione 3.0, ancora da collaudare in gioco) gestisce joystick, manette e pedaliere; tastiera e mouse vengono conservati ma non modificati. Fino alla versione 3.1 il programma si chiamava *SC Binding*.
+Per **Elite Dangerous** (ancora da collaudare in gioco) gestisce joystick, manette e pedaliere, con anteprima 3D e layout; tastiera e mouse vengono conservati ma non modificati. Fino alla versione 3.1 il programma si chiamava *SC Binding*.
 
 ## Cosa fa
 - Rileva le periferiche collegate (DirectInput per joystick/manette/pedali/volanti, XInput per i gamepad).
 - Mostra lo schema della periferica con i tasti: premi un tasto vero e la casella si illumina.
 - 60 modelli con foto e mappa dei comandi (VKB, Virpil, Thrustmaster, Logitech, WinCtrl/WINWING, MOZA, Honeycomb, MFG e pedaliere) più 45 schemi disegnati; per le altre periferiche carichi una foto e posizioni le etichette, e puoi esportare/importare lo schema per condividerlo. Dove il numero di un tasto non è noto, l'app lo impara: clicchi la riga e premi il tasto.
 - Tutti i comandi assegnabili tradotti in italiano.
+- Vista **Essenziali**: la cinquantina di comandi che servono davvero, raggruppati per situazione; avviso quando manca il tasto che attiva una modalità (missili, mining, scanner, quantum) e pulsante **Verifica** per controllare tutto il layout.
+- Ricerca per nome o per tasto della tastiera ("cosa c'è su N?"); varianti dello stesso comando raggruppate.
+- Zona morta, saturazione ed esponente della curva regolabili asse per asse, con grafico della risposta dal vivo.
 - Inversione degli assi, ingressi da ignorare, doppio tocco, più comandi sullo stesso tasto.
-- Anteprima 3D dei movimenti della nave.
+- Anteprima 3D dei movimenti della nave (Star Citizen ed Elite).
+- Più layout con un nome, esportabili e importabili su file.
 - Scrive `actionmaps.xml` nella cartella del gioco (con copia di sicurezza).
 - Le assegnazioni sono legate alla periferica, non al numero `jsN`: se aggiungi o togli una periferica la numerazione viene ricalcolata.
 - Segue gli aggiornamenti di Star Citizen da solo: legge la versione del gioco installato e, quando cambia, rilegge l'elenco dei comandi dai file del gioco (`Data.p4k`) e mostra quali sono nuovi o spariti.
 - Guida introduttiva a passi, al primo avvio e dopo ogni aggiornamento.
-- Stampa o salva in PDF lo schema di ogni periferica con i comandi assegnati, da tenere sottomano mentre giochi.
+- Stampa o salva in PDF lo schema di ogni periferica con i comandi assegnati, da tenere sottomano mentre giochi; in più un foglio «comandi per funzione» (comando → tasto).
 - Aggiornamento automatico: all'avvio controlla l'ultima versione pubblicata qui su GitHub, scarica il nuovo `.exe` accanto a quello in uso, ne verifica l'impronta SHA-256 e passa alla nuova versione (si disattiva dalle Opzioni).
 
 ## Uso

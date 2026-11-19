@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-const appVersion = "4.7"
+const appVersion = "5.0"
 const listenAddr = "127.0.0.1:47811"
 
 //go:embed web
@@ -258,7 +258,7 @@ func currentState() map[string]any {
 			err = os.ErrNotExist
 		}
 		switch {
-		case err == nil && signature(disk) == signature([]byte(x)):
+		case err == nil && signature(disk) == signature([]byte(x)) && !profile.hasAdvPending():
 			sync = "ok"
 		case err != nil || profile.LastWrite[strings.ToLower(sel.Path)] == sel.Hash:
 			sync = "todo"
@@ -389,6 +389,7 @@ func routes() {
 		st["version"] = appVersion
 		st["gameData"] = getGameDataNote()
 		st["maps"] = getMaps()
+		st["guide"] = loadGuide()
 		st["templates"] = templateNames()
 		st["invertDefaults"] = getInvertDefaults()
 		st["photoDevices"] = photoDevices

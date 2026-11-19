@@ -12,14 +12,17 @@
   <img src="icon.png" class="logo" alt=""><div class="brand">ScEd Binder <span id="ver"></span></div>
   <label class="inst">Gioco <select id="game"><option value="sc">Star Citizen</option><option value="ed">Elite Dangerous</option></select></label>
   <label class="inst only-sc">Installazione <select id="install"></select></label>
-  <label class="inst only-sc">Layout <select id="layout" title="Insieme di assegnazioni in uso nell'app"></select></label>
-  <button id="btnLayout" class="small only-sc" title="Crea, duplica, rinomina o elimina un layout">Gestisci</button>
+  <label class="inst">Layout <select id="layout" title="Insieme di assegnazioni in uso nell'app"></select></label>
+  <button id="btnLayout" class="small" title="Crea, duplica, rinomina, elimina, esporta o importa un layout">Gestisci</button>
   <div id="lymenu" class="menu hidden" style="right:auto;left:420px">
     <a data-ly="new">Nuovo layout vuoto…</a>
     <a data-ly="dup">Duplica il layout attuale…</a>
     <a data-ly="ren">Rinomina…</a>
     <a data-ly="del">Elimina il layout attuale</a>
+    <a data-ly="exp">Esporta il layout attuale su file…</a>
+    <a data-ly="imp">Importa un layout da file…</a>
   </div>
+  <input type="file" id="lyfile" accept=".json,application/json" class="hidden">
   <div id="sync" class="sync"></div>
   <div class="spacer"></div>
   <button id="btnImport" title="Legge i comandi attualmente salvati nel gioco">Importa dal gioco</button>
@@ -31,6 +34,7 @@
     <a data-act="opengame">Apri la cartella dei comandi del gioco</a>
     <a data-act="opendata">Apri la cartella dati dell'app (profilo, copie di sicurezza)</a>
     <a data-act="printall">Stampa o salva in PDF gli schemi di tutte le periferiche</a>
+    <a data-act="printfn">Stampa o salva in PDF il foglio «comandi per funzione»</a>
     <a data-act="tour">Guida introduttiva</a>
     <a data-act="options">Opzioni</a>
     <a data-act="log">Diagnostica periferiche</a>
@@ -42,7 +46,7 @@
   <aside>
     <div class="navtop">
     <div class="navitem" data-view="all" id="navAll"><b>Tutti i comandi</b><small id="navAllCount"></small></div>
-    <div class="navitem only-sc" data-view="ship" id="navShip"><b>Anteprima 3D della nave</b><small>prova i movimenti assegnati</small></div>
+    <div class="navitem" data-view="ship" id="navShip"><b>Anteprima 3D della nave</b><small>prova i movimenti assegnati</small></div>
     </div>
     <h3>Periferiche <small>(ordine = numero nel gioco)</small></h3>
     <div id="devlist"></div>

@@ -193,7 +193,7 @@ footer a{color:var(--tenue)}
     <div class="perche">
       <div class="riga"><h3>L'elenco dei comandi è infinito, in inglese, e la periferica non la vedi.</h3><p>Qui vedi lo schema del tuo stick o della tua manetta. Premi un tasto vero e si illumina la casella giusta; cerchi il comando in italiano e lo assegni.</p></div>
       <div class="riga"><h3>Stacchi una periferica e i comandi finiscono sullo stick sbagliato.</h3><p>Windows rinumera i joystick (js1, js2…) e il gioco si confonde. ScEd Binder lega ogni comando alla periferica, non al numero: quando la numerazione cambia, sistema tutto lui.</p></div>
-      <div class="riga"><h3>Curve, zone morte e inversioni saltano insieme ai numeri.</h3><p>Le impostazioni avanzate del joystick restano agganciate alla periferica a cui appartengono, anche le curve personalizzate.</p></div>
+      <div class="riga"><h3>Curve, zone morte e inversioni saltano insieme ai numeri.</h3><p>Le impostazioni avanzate del joystick restano agganciate alla periferica a cui appartengono, anche le curve personalizzate. E zona morta, saturazione e curva le regoli dall'app.</p></div>
     </div>
   </div>
 </section>
@@ -210,6 +210,7 @@ footer a{color:var(--tenue)}
           <li>Il tasto che premi si illumina sullo schema e nell'elenco</li>
           <li>Più comandi sullo stesso tasto, doppio tocco, tieni premuto</li>
           <li>Inverti un asse o ignora un ingresso con un clic</li>
+          <li>Zona morta, saturazione e curva di ogni asse, con il grafico della risposta dal vivo</li>
           <li>Se il tuo modello non c'è, carichi una foto e metti tu le etichette</li>
         </ul>
       </div>
@@ -218,10 +219,15 @@ footer a{color:var(--tenue)}
 
     <div class="funz gira">
       <div class="testo">
-        <h3>Ogni comando ha un nome in italiano</h3>
-        <p>Oltre 750 comandi di Star Citizen tradotti, con il nome inglese accanto. Li cerchi per nome, vedi i tasti predefiniti di tastiera e gamepad, e puoi partire dal comando: clicchi la casella e premi il tasto che vuoi usare.</p>
+        <h3>Prima i comandi che servono davvero</h3>
+        <p>Star Citizen ha oltre 750 comandi, molti quasi uguali. L'elenco si apre sugli essenziali, una cinquantina, raggruppati per situazione: decollo, volo, quantum, combattimento, atterraggio. Tutti hanno un nome in italiano, con quello inglese sotto.</p>
+        <ul>
+          <li>Verifica: ti dice se manca il tasto che attiva missili, mining o scanner, o se un movimento è assegnato a metà</li>
+          <li>Conosci solo il tasto della tastiera? Scrivi N o alt+Y e trovi il comando</li>
+          <li>Parti dal comando: clicchi la casella e premi il tasto che vuoi usare</li>
+        </ul>
       </div>
-      <div class="finestra"><img loading="lazy" src="img/comandi.webp" width="1600" height="933" alt="L'elenco di tutti i comandi con la ricerca: nomi in italiano, nome inglese sotto, e le colonne di tastiera, joystick e gamepad"></div>
+      <div class="finestra"><img loading="lazy" src="img/comandi.webp" width="1600" height="933" alt="La vista Essenziali: i comandi raggruppati per situazione, con le colonne di tastiera, joystick e gamepad e il pulsante Verifica"></div>
     </div>
 
     <div class="funz">
@@ -235,7 +241,7 @@ footer a{color:var(--tenue)}
     <div class="funz gira">
       <div class="testo">
         <h3>Stampa o PDF da tenere sottomano</h3>
-        <p>Lo schema di ogni periferica con i comandi assegnati, su un foglio A4. Una pagina per periferica, anche tutte insieme.</p>
+        <p>Lo schema di ogni periferica con i comandi assegnati, su un foglio A4. Una pagina per periferica, anche tutte insieme. C'è anche il foglio «comandi per funzione»: l'elenco comando → tasto, raggruppato per situazione.</p>
       </div>
       <div><img class="foglio" loading="lazy" src="img/stampa.webp" width="900" height="1273" alt="Un foglio A4 stampato dal programma: lo schema di uno stick con il nome del comando in ogni casella"></div>
     </div>
@@ -245,7 +251,7 @@ footer a{color:var(--tenue)}
         <h3>Una guida che ti accompagna</h3>
         <p>Al primo avvio una guida a passi ti mostra ogni funzione evidenziando il punto dello schermo di cui parla. Dopo ogni aggiornamento ti dice cosa è cambiato.</p>
         <ul>
-          <li>Layout con un nome: volo, mining, combattimento</li>
+          <li>Layout con un nome: volo, mining, combattimento. Li esporti su file e li reimporti</li>
           <li>Copia di sicurezza del file del gioco a ogni scrittura</li>
         </ul>
       </div>
@@ -278,8 +284,8 @@ footer a{color:var(--tenue)}
 
 <section class="fascia" id="video">
   <div class="dentro">
-    <h2>Un minuto e mezzo di video.</h2>
-    <p class="sotto">Senza audio, con le didascalie. È girato con una delle prime versioni: oggi il programma fa qualcosa in più.</p>
+    <h2>Due minuti di video.</h2>
+    <p class="sotto">Senza audio, con le didascalie. Girato con la versione 5.0, con periferiche simulate.</p>
     <div class="video"><video controls preload="none" poster="img/video.webp" width="1920" height="1080"><source src="ScEd_Binder_demo.mp4" type="video/mp4">Il tuo browser non mostra i video: <a href="ScEd_Binder_demo.mp4">scarica il file</a>.</video></div>
   </div>
 </section>
@@ -289,7 +295,7 @@ footer a{color:var(--tenue)}
     <h2>A che punto è, gioco per gioco.</h2>
     <div class="giochi">
       <div class="gioco"><span class="stato ok">Provato in gioco</span><h3>Star Citizen</h3><p>Tutti i comandi assegnabili, tradotti in italiano. Joystick, manette, pedaliere, volanti; tastiera, mouse e gamepad nell'elenco completo. Anteprima 3D, layout, impostazioni avanzate conservate.</p></div>
-      <div class="gioco"><span class="stato prova2">Prima versione, in collaudo</span><h3>Elite Dangerous</h3><p>Joystick, manette e pedaliere, con i comandi in inglese e la traduzione sotto. Tastiera e mouse vengono conservati ma non modificati. Se lo provi, il tuo riscontro è prezioso.</p></div>
+      <div class="gioco"><span class="stato prova2">Prima versione, in collaudo</span><h3>Elite Dangerous</h3><p>Joystick, manette e pedaliere, con i comandi in inglese e la traduzione sotto, l'anteprima 3D della nave e i layout. Tastiera e mouse vengono conservati ma non modificati. Se lo provi, il tuo riscontro è prezioso.</p></div>
     </div>
   </div>
 </section>

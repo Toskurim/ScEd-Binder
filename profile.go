@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"html"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -24,14 +26,15 @@ type Hotspot struct {
 type DevInfo struct {
 	Name     string                         `json:"name"`
 	GUID     string                         `json:"guid"`
-	Product  string                         `json:"product"`  // stringa "Product" esatta usata dal gioco
-	Options  string                         `json:"options"`  // contenuto di <options> (curve, inversioni) conservato
-	Image    string                         `json:"image"`    // "tpl:Nome" oppure "img:file"
-	Hotspots []Hotspot                      `json:"hotspots"` // etichette posizionate a mano sull'immagine
-	Alias    string                         `json:"alias"`    // nome scelto dall'utente
-	Invert   map[string]bool                `json:"invert"`   // gruppo opzioni -> asse invertito
-	Ignored  []string                       `json:"ignored"`  // ingressi da non rilevare
-	PhotoMap map[string]map[string][]string `json:"photoMap"` // modello -> comando -> ingressi corretti dall\'utente
+	Product  string                         `json:"product"`       // stringa "Product" esatta usata dal gioco
+	Options  string                         `json:"options"`       // contenuto di <options> (curve, inversioni) conservato
+	Image    string                         `json:"image"`         // "tpl:Nome" oppure "img:file"
+	Hotspots []Hotspot                      `json:"hotspots"`      // etichette posizionate a mano sull'immagine
+	Alias    string                         `json:"alias"`         // nome scelto dall'utente
+	Invert   map[string]bool                `json:"invert"`        // gruppo opzioni -> asse invertito
+	Ignored  []string                       `json:"ignored"`       // ingressi da non rilevare
+	Adv      *AdvEdit                       `json:"adv,omitempty"` // zone morte, saturazione, esponenti regolati nell'app e non ancora nel file del gioco
+	PhotoMap map[string]map[string][]string `json:"photoMap"`      // modello -> comando -> ingressi corretti dall\'utente
 }
 
 type Binding struct {
@@ -47,7 +50,8 @@ type Binding struct {
 type Layout struct {
 	Name     string                     `json:"name"`
 	Bindings []Binding                  `json:"bindings"`
-	Invert   map[string]map[string]bool `json:"invert"` // periferica -> gruppo -> invertito
+	Invert   map[string]map[string]bool `json:"invert"`       // periferica -> gruppo -> invertito
+	ED       map[string]*EDBind         `json:"ed,omitempty"` // assegnazioni di Elite Dangerous di questo layout
 }
 
 type Profile struct {
@@ -575,7 +579,11 @@ func (p *Profile) buildXML(connected []Device) (string, WriteStats) {
 		fmt.Fprintf(&sb, ` %s="%s"`, a[0], xmlEsc(a[1]))
 	}
 	sb.WriteString(">\n")
-	for _, e := range p.Extras {
+	prods := map[string]string{}
+	for _, d := range js {
+		prods[d.Key] = p.productString(d.Key, d)
+	}
+	for _, e := range p.effExtras(prods) {
 		sb.WriteString("  " + strings.TrimSpace(e) + "\n")
 	}
 	if len(p.OtherOptions) == 0 {
@@ -589,7 +597,7 @@ func (p *Profile) buildXML(connected []Device) (string, WriteStats) {
 		st.Joysticks = append(st.Joysticks, fmt.Sprintf("js%d = %s", i+1, strings.TrimSpace(productName(prod))))
 		inner := ""
 		if di := p.Devices[d.Key]; di != nil {
-			inner = strings.TrimSpace(mergeInvert(di.Options, di.Invert))
+			inner = strings.TrimSpace(mergeInvert(effOptions(di), di.Invert))
 		}
 		if inner == "" {
 			// un'opzione esplicita (valore predefinito) fa sì che il gioco rispetti il numero assegnato a questa periferica
@@ -932,6 +940,9 @@ func (p *Profile) refreshFromGame(disk []byte) bool {
 			changed = true
 		}
 	}
+	if p.dropWrittenAdv() {
+		changed = true
+	}
 	return changed
 }
 
@@ -982,7 +993,7 @@ func (p *Profile) advancedDetail() map[string]AdvDetail {
 	res := map[string]AdvDetail{}
 	for key, di := range p.Devices {
 		d := AdvDetail{Axes: map[string]AdvAxis{}, Groups: map[string]AdvGroup{}}
-		for _, e := range p.Extras {
+		for _, e := range p.effExtras(map[string]string{key: "?  " + di.GUID}) {
 			m := devOptNameRe.FindStringSubmatch(e)
 			if m == nil || di.GUID == "" || productGUID(m[1]) != di.GUID {
 				continue
@@ -1008,8 +1019,8 @@ func (p *Profile) advancedDetail() map[string]AdvDetail {
 				d.Axes[o.Input] = a
 			}
 		}
-		if strings.TrimSpace(di.Options) != "" {
-			dec := xml.NewDecoder(strings.NewReader("<o>" + di.Options + "</o>"))
+		if eo := effOptions(di); strings.TrimSpace(eo) != "" {
+			dec := xml.NewDecoder(strings.NewReader("<o>" + eo + "</o>"))
 			stack := []string{}
 			for {
 				tok, err := dec.Token()
@@ -1049,4 +1060,243 @@ func (p *Profile) advancedDetail() map[string]AdvDetail {
 		}
 	}
 	return res
+}
+
+// ---------- zone morte, saturazione ed esponenti regolati dall'app ----------
+
+// AdvEdit: valori scelti nell'app e non ancora presenti nel file del gioco. Dopo la scrittura,
+// quando il file del gioco li contiene, vengono tolti da qui (vedi dropWrittenAdv).
+// Valore "" = torna al valore standard (la riga viene tolta dal file).
+type AdvEdit struct {
+	Axes map[string]AdvAxisEdit `json:"axes,omitempty"`
+	Exp  map[string]*string     `json:"exp,omitempty"` // gruppo -> esponente
+}
+type AdvAxisEdit struct {
+	Deadzone   *string `json:"deadzone,omitempty"`
+	Saturation *string `json:"saturation,omitempty"`
+}
+
+func (a *AdvEdit) empty() bool { return a == nil || (len(a.Axes) == 0 && len(a.Exp) == 0) }
+
+func (p *Profile) hasAdvPending() bool {
+	for _, di := range p.Devices {
+		if !di.Adv.empty() {
+			return true
+		}
+	}
+	return false
+}
+
+func sameNum(a, b string) bool {
+	if a == b {
+		return true
+	}
+	x, e1 := strconv.ParseFloat(a, 64)
+	y, e2 := strconv.ParseFloat(b, 64)
+	return e1 == nil && e2 == nil && math.Abs(x-y) < 0.0005
+}
+
+var expAttrRe = regexp.MustCompile(`\s+exponent="[^"]*"`)
+
+// effOptions: opzioni del joystick con gli esponenti scelti nell'app. Le curve personalizzate non si toccano.
+func effOptions(di *DevInfo) string {
+	if di == nil {
+		return ""
+	}
+	if di.Adv == nil || len(di.Adv.Exp) == 0 {
+		return di.Options
+	}
+	out := []string{}
+	done := map[string]bool{}
+	for _, k := range optionKids(di.Options) {
+		raw := k.raw
+		v, ok := di.Adv.Exp[k.name]
+		if ok && v != nil && !strings.Contains(raw, "<nonlinearity_curve") {
+			done[k.name] = true
+			end := strings.Index(raw, ">")
+			if end > 0 {
+				tag, tail := expAttrRe.ReplaceAllString(raw[:end], ""), raw[end:]
+				if *v != "" && !sameNum(*v, "1") {
+					self := strings.HasSuffix(tag, "/")
+					tag = strings.TrimSuffix(tag, "/")
+					tag = strings.TrimRight(tag, " ") + ` exponent="` + xmlEsc(*v) + `"`
+					if self {
+						tag += "/"
+					}
+				}
+				raw = tag + tail
+				if strings.TrimSpace(strings.TrimSuffix(strings.TrimSuffix(raw, ">"), "/")) == "<"+k.name {
+					continue // non resta nulla: la riga sparisce
+				}
+			}
+		} else if ok {
+			done[k.name] = true
+		}
+		out = append(out, raw)
+	}
+	names := []string{}
+	for g, v := range di.Adv.Exp {
+		if !done[g] && v != nil && *v != "" && !sameNum(*v, "1") {
+			names = append(names, g)
+		}
+	}
+	sort.Strings(names)
+	for _, g := range names {
+		out = append(out, "<"+g+` exponent="`+xmlEsc(*di.Adv.Exp[g])+`"/>`)
+	}
+	return strings.Join(out, "\n   ")
+}
+
+// effExtras: blocchi extra del file con zone morte e saturazione scelte nell'app.
+// prods: stringa Product per le periferiche di cui il profilo non la conosce ancora.
+func (p *Profile) effExtras(prods map[string]string) []string {
+	out := append([]string{}, p.Extras...)
+	keys := []string{}
+	for k, di := range p.Devices {
+		if di.Adv != nil && len(di.Adv.Axes) > 0 {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	doneGUID := map[string]bool{}
+	for _, key := range keys {
+		di := p.Devices[key]
+		if di.GUID == "" || doneGUID[di.GUID] { // il gioco lega questo blocco al modello, non al singolo esemplare
+			continue
+		}
+		doneGUID[di.GUID] = true
+		type av struct{ dz, sat string }
+		vals := map[string]*av{}
+		order := []string{}
+		idx := -1
+		name := di.Product
+		for i, e := range out {
+			m := devOptNameRe.FindStringSubmatch(e)
+			if m == nil || productGUID(m[1]) != di.GUID {
+				continue
+			}
+			idx, name = i, html.UnescapeString(m[1])
+			var x struct {
+				Options []struct {
+					Input      string `xml:"input,attr"`
+					Deadzone   string `xml:"deadzone,attr"`
+					Saturation string `xml:"saturation,attr"`
+				} `xml:"option"`
+			}
+			if xml.Unmarshal([]byte(e), &x) == nil {
+				for _, o := range x.Options {
+					if vals[o.Input] == nil {
+						vals[o.Input] = &av{}
+						order = append(order, o.Input)
+					}
+					if o.Deadzone != "" {
+						vals[o.Input].dz = o.Deadzone
+					}
+					if o.Saturation != "" {
+						vals[o.Input].sat = o.Saturation
+					}
+				}
+			}
+			break
+		}
+		if name == "" {
+			name = prods[key]
+		}
+		if name == "" {
+			continue // periferica mai vista dal gioco e non collegata: non so come chiamarla
+		}
+		ins := []string{}
+		for in := range di.Adv.Axes {
+			ins = append(ins, in)
+		}
+		sort.Strings(ins)
+		for _, in := range ins {
+			e := di.Adv.Axes[in]
+			if vals[in] == nil {
+				vals[in] = &av{}
+				order = append(order, in)
+			}
+			if e.Deadzone != nil {
+				vals[in].dz = *e.Deadzone
+			}
+			if e.Saturation != nil {
+				vals[in].sat = *e.Saturation
+			}
+		}
+		var sb strings.Builder
+		n := 0
+		fmt.Fprintf(&sb, "<deviceoptions name=\"%s\">\n", xmlEsc(name))
+		for _, in := range order {
+			if v := vals[in]; v.sat != "" && !sameNum(v.sat, "1") {
+				fmt.Fprintf(&sb, "   <option input=\"%s\" saturation=\"%s\"/>\n", xmlEsc(in), xmlEsc(v.sat))
+				n++
+			}
+		}
+		for _, in := range order {
+			if v := vals[in]; v.dz != "" && !sameNum(v.dz, "0") {
+				fmt.Fprintf(&sb, "   <option input=\"%s\" deadzone=\"%s\"/>\n", xmlEsc(in), xmlEsc(v.dz))
+				n++
+			}
+		}
+		sb.WriteString("  </deviceoptions>")
+		switch {
+		case n == 0 && idx >= 0:
+			out = append(out[:idx], out[idx+1:]...)
+		case n == 0:
+		case idx >= 0:
+			out[idx] = sb.String()
+		default:
+			out = append(out, sb.String())
+		}
+	}
+	return out
+}
+
+// dropWrittenAdv toglie dalle modifiche in sospeso i valori che il file del gioco contiene già.
+func (p *Profile) dropWrittenAdv() bool {
+	changed := false
+	file := (&Profile{Devices: p.devicesNoAdv(), Extras: p.Extras}).advancedDetail()
+	for key, di := range p.Devices {
+		if di.Adv == nil {
+			continue
+		}
+		cur := file[key]
+		for in, e := range di.Adv.Axes {
+			have := cur.Axes[in]
+			if e.Deadzone != nil && (sameNum(*e.Deadzone, have.Deadzone) || ((*e.Deadzone == "" || sameNum(*e.Deadzone, "0")) && have.Deadzone == "")) {
+				e.Deadzone = nil
+			}
+			if e.Saturation != nil && (sameNum(*e.Saturation, have.Saturation) || ((*e.Saturation == "" || sameNum(*e.Saturation, "1")) && have.Saturation == "")) {
+				e.Saturation = nil
+			}
+			if e.Deadzone == nil && e.Saturation == nil {
+				delete(di.Adv.Axes, in)
+				changed = true
+			} else {
+				di.Adv.Axes[in] = e
+			}
+		}
+		for g, v := range di.Adv.Exp {
+			have := cur.Groups[g].Exponent
+			if v == nil || cur.Groups[g].Points > 0 || sameNum(*v, have) || ((*v == "" || sameNum(*v, "1")) && have == "") {
+				delete(di.Adv.Exp, g)
+				changed = true
+			}
+		}
+		if di.Adv.empty() {
+			di.Adv = nil
+			changed = true
+		}
+	}
+	return changed
+}
+
+func (p *Profile) devicesNoAdv() map[string]*DevInfo {
+	m := map[string]*DevInfo{}
+	for k, di := range p.Devices {
+		c := *di
+		c.Adv = nil
+		m[k] = &c
+	}
+	return m
 }
