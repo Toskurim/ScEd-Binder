@@ -741,7 +741,8 @@ function showGameChange() {
 }
 
 // ---------- guida introduttiva ----------
-const NEWS = { ver: '5.0', items: [
+const NEWS = { ver: '5.1', items: [
+  '<b>Novità 5.1</b>: anche la finestra «+ comando» della periferica si apre sugli <b>Essenziali</b>, con il pulsante «Tutti» per l\'elenco completo.',
   '<b>Essenziali</b>: «Tutti i comandi» ora si apre sui comandi che servono davvero, raggruppati per situazione (decollo, volo, quantum, combattimento, atterraggio…). Con «Tutti» torni all\'elenco completo.',
   '<b>Prerequisiti</b>: se assegni un comando che funziona solo in una certa modalità (missili, mining, scanner, quantum…) l\'app ti avvisa quando ti manca il tasto che la attiva.',
   '<b>✓ Verifica</b>: controlla in un colpo prerequisiti mancanti, movimenti assegnati a metà e comandi che il gioco non ha più.',
@@ -1303,19 +1304,29 @@ function closeModal() { $('#modal').classList.add('hidden'); if (S.capture) { S.
 function pickCommand(devKey, input) {
   if (isED()) return pickCommandED(devKey, input);
   openModal(`<h2>Assegna un comando a ${esc(inputLabel(input))} — ${esc(devName(devKey))}</h2>
-    <input type="search" id="pq" placeholder="Cerca un comando…" autofocus>
+    <div class="prow"><div class="seg" id="pseg"></div><input type="search" id="pq" placeholder="Cerca un comando…" autofocus></div>
+    <div class="en" id="pnote"></div>
     <div class="pick" id="plist"></div>
     <label class="chk"><input type="checkbox" id="pdbl"> <span>Doppio tocco (il comando parte premendo due volte rapidamente)</span></label>
     <div class="btns"><button data-close="1">Annulla</button></div>`);
+  const nEss = (guide().gruppi || []).reduce((n, g) => n + (g.comandi || []).filter(k => S.actions.get(k)).length, 0);
+  const row = a => { const cur = bindingsOf(a.map, a.name).filter(b => isJsDev(b.dev))[0];
+    return `<div class="a" data-a="${esc(actKey(a.map, a.name))}"><span>${esc(a.label)}${a.axis ? '<span class="ax">asse</span>' : ''} <span class="en">${esc(a.labelEn)}</span></span><span class="def">${cur ? 'ora: ' + esc(inputLabel(cur.input)) + ' su ' + esc(devName(cur.dev).slice(0, 18)) : ''}</span></div>`; };
   const draw = () => {
     const q = $('#pq').value.trim().toLowerCase(); let out = '';
+    const ess = nEss && S.filter.view !== 'all';
+    $('#pseg').innerHTML = nEss ? `<button class="${ess ? 'on' : ''}" data-pv="ess">Essenziali (${nEss})</button><button class="${ess ? '' : 'on'}" data-pv="all">Tutti</button>` : '';
+    $('#pnote').textContent = ess && q ? 'La ricerca guarda in tutti i comandi, non solo negli essenziali.' : '';
+    if (ess && !q) {
+      for (const g of guide().gruppi || []) { const part = (g.comandi || []).map(k => S.actions.get(k)).filter(Boolean).map(row).join(''); if (part) out += `<div class="g">${esc(g.titolo)}</div>` + part; }
+      $('#plist').innerHTML = out; return;
+    }
     for (const m of S.maps) {
       let part = '';
       for (const a of (m.actions || [])) {
         if (!a.visible && !S.filter.hidden) continue;
         if (q && !(a.label + ' ' + a.labelEn + ' ' + a.name).toLowerCase().includes(q)) continue;
-        const cur = bindingsOf(a.map, a.name).filter(b => isJsDev(b.dev))[0];
-        part += `<div class="a" data-a="${esc(actKey(a.map, a.name))}"><span>${esc(a.label)}${a.axis ? '<span class="ax">asse</span>' : ''} <span class="en">${esc(a.labelEn)}</span></span><span class="def">${cur ? 'ora: ' + esc(inputLabel(cur.input)) + ' su ' + esc(devName(cur.dev).slice(0, 18)) : ''}</span></div>`;
+        part += row(a);
       }
       if (part) out += `<div class="g">${esc(m.label)}</div>` + part;
     }
@@ -1323,6 +1334,7 @@ function pickCommand(devKey, input) {
   };
   draw();
   $('#pq').oninput = draw; $('#pq').focus();
+  $('#pseg').onclick = e => { const v = e.target.dataset.pv; if (!v) return; S.filter.view = v; draw(); $('#plist').scrollTop = 0; };
   $('#plist').onclick = e => {
     const el = e.target.closest('.a[data-a]'); if (!el) return;
     const act = S.actions.get(el.dataset.a), dbl = $('#pdbl').checked;

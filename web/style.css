@@ -252,3 +252,5 @@ tr.var{background:rgba(58,160,255,.04)}
 .axf label{display:flex;flex-direction:column;gap:4px;font-weight:600}
 .axf input{width:110px}
 .axf .hint{font-weight:400}
+
+.prow{display:flex;gap:10px;align-items:center;margin-bottom:6px}.prow input{flex:1;margin:0}.prow .seg{flex:none}
