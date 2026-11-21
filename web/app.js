@@ -741,7 +741,8 @@ function showGameChange() {
 }
 
 // ---------- guida introduttiva ----------
-const NEWS = { ver: '5.1', items: [
+const NEWS = { ver: '5.2', items: [
+  '<b>Novità 5.2</b>: negli Essenziali entrano <b>Coupled / Decoupled</b>, <b>Entra nella torretta remota 1</b> e <b>Torretta remota successiva</b>; il cambio telecamera (F4) ora si chiama «Vista esterna / cambia telecamera».',
   '<b>Novità 5.1</b>: anche la finestra «+ comando» della periferica si apre sugli <b>Essenziali</b>, con il pulsante «Tutti» per l\'elenco completo.',
   '<b>Essenziali</b>: «Tutti i comandi» ora si apre sui comandi che servono davvero, raggruppati per situazione (decollo, volo, quantum, combattimento, atterraggio…). Con «Tutti» torni all\'elenco completo.',
   '<b>Prerequisiti</b>: se assegni un comando che funziona solo in una certa modalità (missili, mining, scanner, quantum…) l\'app ti avvisa quando ti manca il tasto che la attiva.',
